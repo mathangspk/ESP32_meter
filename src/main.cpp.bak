@@ -1,0 +1,31 @@
+#include <Arduino.h>
+
+void setup()
+{
+    Serial.begin(115200);                    // Serial USB với máy tính
+    Serial2.begin(9600, SERIAL_8N1, 16, 17); // UART2, baud 9600, RX=16, TX=17
+    Serial.println("UART2 loopback test started.");
+    Serial.println("Nối chân 16 (RX2) với chân 17 (TX2) để test.");
+}
+
+void loop()
+{
+    // Nếu dữ liệu có trên Serial2 (chân 16, RX2)
+    if (Serial2.available())
+    {
+        char c = Serial2.read();
+        Serial.print("Received on UART2: ");
+        Serial.println(c);
+        // Gửi lại dữ liệu ra UART2 (chân 17, TX2) để loopback
+        Serial2.write(c);
+    }
+
+    // Nếu dữ liệu có trên Serial USB (Serial0)
+    if (Serial.available())
+    {
+        char c = Serial.read();
+        Serial2.write(c); // Gửi dữ liệu từ Serial USB ra UART2 (TX2)
+        Serial.print("Sent to UART2: ");
+        Serial.println(c);
+    }
+}
