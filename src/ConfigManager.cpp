@@ -25,7 +25,7 @@ void ConfigManager::setDefaults()
     config.wifi_ssid = "";
     config.wifi_password = "";
     config.mqtt_username = "mqtt";
-    config.mqtt_password = "@51209267192Cvv";
+    config.mqtt_password = "-------------";
 }
 
 bool ConfigManager::loadConfig()
