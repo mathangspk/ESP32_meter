@@ -5,7 +5,9 @@
 #include "ConfigManager.h"
 #include "WebConfig.h"
 #include "WiFiLedStatus.h"
-// #include <WiFiManager.h>
+#include "DataReceiver.h"
+// #include "OTAUpdate.h"
+//  #include <WiFiManager.h>
 
 // Define your RX and TX pins here (adjust as needed for your hardware)
 #define RX_PIN 16
@@ -14,6 +16,7 @@
 Meter meter(1, RX_PIN, TX_PIN);
 NetworkManager networkManager;
 DataSender dataSender;
+// DataReceiver *dataReceiver = nullptr;
 ConfigManager configManager;
 WebConfig webConfig(configManager);
 WiFiLedStatus wifiLedStatus(LED_BUILTIN); // Use the built-in LED on ESP32
@@ -48,6 +51,11 @@ void setup()
     networkManager.connect();
     meter.syncTime();
     dataSender.setup();
+    // Khởi tạo DataReceiver, truyền client từ dataSender
+
+    // dataReceiver = new DataReceiver(dataSender.getClient());
+    // dataReceiver->setup(configManager.getDeviceId().c_str());
+    //  dataReceiver->setOtaHandler(handleOtaUpdate); // Đăng ký hàm OTA
     webConfig.begin();
     delay(1000);
     Serial.println("SSID đang kết nối: " + WiFi.SSID());
@@ -70,6 +78,11 @@ void loop()
 {
     dataSender.loop();
     webConfig.handle();
+    // if (dataReceiver)
+    //{
+    //  Serial.println("🔄 Kiểm tra dữ liệu từ DataReceiver...");
+    //    dataReceiver->loop();
+    //}
 
     unsigned long now = millis();
 

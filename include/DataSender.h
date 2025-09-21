@@ -17,6 +17,7 @@ public:
     void addToBuffer(float voltage, float current, float power, float energy, String IPAddress);
     bool isConnected();
     void updateConfig(const char *mqttServer, int mqttPort, const char *deviceId, const char *serialNumber, const char *mqttPassword, const char *mqttUser); // sửa hàm này
+    PubSubClient &getClient();
 
 private:
     void reconnect();

@@ -2,11 +2,14 @@
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include "ConfigManager.h"
+#include "OTAUpdate.h"
+
+#define FIRMWARE_VERSION "1.0.0"
 
 extern ConfigManager configManager;
 
 DataSender::DataSender()
-    : mqttServer("113.161.220.166"), mqttPort(1883), deviceId("1"), serialNumber("SN001"),
+    : mqttServer("113.161.220.166"), mqttPort(1883), deviceId("5"), serialNumber("SN005"),
       client(wifiClient), bufferIndex(0), bufferCount(0)
 {
     client.setCallback([this](char *topic, byte *payload, unsigned int length)
@@ -70,6 +73,11 @@ void DataSender::reconnect()
         String controlTopic = "meter/" + String(deviceId) + "/control";
         client.subscribe(controlTopic.c_str());
 
+        // Thêm subscribe cho topic test
+        String testTopic = "firmwareUpdateOTA/device/" + String(serialNumber);
+        client.subscribe(testTopic.c_str());
+        Serial.print("Subscribed to: ");
+        Serial.println(testTopic);
         // Send buffered data if any
         sendBufferedData();
     }
@@ -86,6 +94,7 @@ void DataSender::callback(char *topic, byte *payload, unsigned int length)
     Serial.print("Message arrived [");
     Serial.print(topic);
     Serial.print("] ");
+
     String message;
     for (unsigned int i = 0; i < length; i++)
     {
@@ -93,8 +102,33 @@ void DataSender::callback(char *topic, byte *payload, unsigned int length)
     }
     Serial.println(message);
 
-    // Handle control messages here if needed
-    // For example: restart, change reading interval, etc.
+    // Parse JSON
+    StaticJsonDocument<256> doc;
+    DeserializationError error = deserializeJson(doc, message);
+    if (error)
+    {
+        Serial.print("deserializeJson() failed: ");
+        Serial.println(error.f_str());
+        return;
+    }
+
+    const char *ota_url = doc["OTAurl"]; // 👉 Lấy ra trường OTAurl
+    String expectedTopic = "firmwareUpdateOTA/device/" + String(serialNumber);
+
+    if (String(topic) == expectedTopic)
+    {
+        Serial.println("Received OTA update command");
+
+        if (ota_url && String(ota_url).startsWith("http"))
+        {
+            Serial.printf("Starting OTA update from URL: %s\n", ota_url);
+            handleOtaUpdate(ota_url);
+        }
+        else
+        {
+            Serial.println("Invalid OTA URL received!");
+        }
+    }
 }
 
 void DataSender::sendData(float voltage, float current, float power, float energy, String IPAddress)
@@ -190,7 +224,7 @@ String DataSender::createPayload(String serial_number, float voltage, float curr
     doc["energy"] = energy;
     doc["ip_address"] = IPAddress;
     doc["timestamp"] = getTimestamp();
-
+    doc["firmware_version"] = FIRMWARE_VERSION;
     String output;
     serializeJson(doc, output);
     return output;
@@ -208,4 +242,9 @@ String DataSender::getTimestamp()
 bool DataSender::isConnected()
 {
     return client.connected();
+}
+
+PubSubClient &DataSender::getClient()
+{
+    return client;
 }
