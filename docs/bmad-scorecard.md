@@ -163,5 +163,5 @@ Handoff:
   handoff_updated: yes
 Result:
   outcome: backend and bot now support a single analytics summary path and natural-language Telegram question handling for current readings and same-day usage analytics
-  notes: live Telegram verification still remains, especially for device disambiguation and real data phrasing
+  notes: live Telegram verification still remains, especially for device disambiguation, inventory questions, and real data phrasing
 ```

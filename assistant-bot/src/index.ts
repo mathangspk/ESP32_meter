@@ -1,7 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { backendClient, Membership } from "./backend-client";
 import { config } from "./config";
-import { askGroq, parseAnalyticsIntent, renderAnalyticsAnswer } from "./groq";
+import { askGroq, parseAnalyticsIntent, parseInventoryIntent, renderAnalyticsAnswer } from "./groq";
 import { logger } from "./logger";
 import { getUpdates, sendMessage, TelegramUpdate } from "./telegram";
 
@@ -252,6 +252,40 @@ async function handleAnalyticsQuestion(chatId: number, text: string, user: { use
   const summary = await backendClient.getDeviceAnalyticsSummary(device.serialNumber);
   const answer = await renderAnalyticsAnswer(text, intent.intent, summary);
   await sendMessage(chatId, answer ?? formatAnalyticsFallback(summary));
+  return true;
+}
+
+function formatManagedDeviceLabel(device: Awaited<ReturnType<typeof backendClient.getDevices>>[number]) {
+  const label = device.displayName ?? device.serialNumber;
+  return `${label} (${device.serialNumber})`;
+}
+
+async function handleInventoryQuestion(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
+  const intent = await parseInventoryIntent(text);
+  if (intent.intent === "unknown") {
+    return false;
+  }
+
+  const devices = await getAccessibleDevices(user, memberships);
+  const count = devices.length;
+  const names = devices.map(formatManagedDeviceLabel);
+
+  if (count === 0) {
+    await sendMessage(chatId, "Hiện bạn chưa quản lý thiết bị nào trong phạm vi tài khoản này.");
+    return true;
+  }
+
+  if (intent.intent === "get_managed_device_count") {
+    await sendMessage(chatId, `Hiện bạn đang quản lý ${count} thiết bị.`);
+    return true;
+  }
+
+  if (intent.intent === "get_managed_device_list") {
+    await sendMessage(chatId, `Các thiết bị bạn đang quản lý: ${names.join(", ")}.`);
+    return true;
+  }
+
+  await sendMessage(chatId, `Hiện bạn đang quản lý ${count} thiết bị: ${names.join(", ")}.`);
   return true;
 }
 
@@ -779,6 +813,10 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
 }
 
 async function handleNaturalLanguage(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
+  if (await handleInventoryQuestion(chatId, text, user, memberships)) {
+    return;
+  }
+
   if (await handleAnalyticsQuestion(chatId, text, user, memberships)) {
     return;
   }

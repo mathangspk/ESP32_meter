@@ -126,6 +126,10 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
   - current voltage plus power summary
   - today's energy usage
   - today's peak hour by highest average power
+- `assistant-bot` now also handles natural-language inventory questions for:
+  - how many devices the current user manages
+  - what those devices are called
+  - combined count plus device-name questions
 - `assistant-bot` now resolves devices from accessible tenant or admin scope before asking Groq to phrase an analytics answer naturally in Vietnamese
 - Backend now exposes firmware release management endpoints:
   - `GET /admin/firmware/releases`

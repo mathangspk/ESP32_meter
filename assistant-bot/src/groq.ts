@@ -7,7 +7,13 @@ const analyticsIntentSchema = z.object({
   confidence: z.number().min(0).max(1).optional(),
 });
 
+const inventoryIntentSchema = z.object({
+  intent: z.enum(["get_managed_device_count", "get_managed_device_list", "get_managed_device_summary", "unknown"]),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
 export type AnalyticsIntent = z.infer<typeof analyticsIntentSchema>;
+export type InventoryIntent = z.infer<typeof inventoryIntentSchema>;
 
 type AnalyticsSummary = {
   displayName?: string;
@@ -122,6 +128,69 @@ export async function parseAnalyticsIntent(question: string): Promise<AnalyticsI
     return analyticsIntentSchema.parse(JSON.parse(extractJsonObject(content)));
   } catch {
     return fallbackParseAnalyticsIntent(question);
+  }
+}
+
+function fallbackParseInventoryIntent(question: string): InventoryIntent {
+  const text = question.toLowerCase();
+  const asksCount = text.includes("bao nhiêu thiết bị") || text.includes("bao nhieu thiet bi") || text.includes("how many devices");
+  const asksNames =
+    text.includes("tên gì") ||
+    text.includes("ten gi") ||
+    text.includes("thiết bị nào") ||
+    text.includes("thiet bi nao") ||
+    text.includes("danh sách thiết bị") ||
+    text.includes("danh sach thiet bi") ||
+    text.includes("list devices") ||
+    text.includes("device names");
+  const asksManagedScope =
+    text.includes("quản lý") || text.includes("quan ly") || text.includes("my devices") || text.includes("managed devices");
+
+  if ((asksCount && asksNames) || (asksManagedScope && asksNames)) {
+    return { intent: "get_managed_device_summary", confidence: 0.5 };
+  }
+
+  if (asksNames) {
+    return { intent: "get_managed_device_list", confidence: 0.5 };
+  }
+
+  if (asksCount || asksManagedScope) {
+    return { intent: "get_managed_device_count", confidence: 0.5 };
+  }
+
+  return { intent: "unknown", confidence: 0 };
+}
+
+export async function parseInventoryIntent(question: string): Promise<InventoryIntent> {
+  const fallback = fallbackParseInventoryIntent(question);
+  if (fallback.intent !== "unknown") {
+    return fallback;
+  }
+
+  if (!config.GROQ_API_KEY) {
+    return fallback;
+  }
+
+  try {
+    const content = await requestGroq([
+      {
+        role: "system",
+        content:
+          "You classify natural-language device inventory questions for an IoT power meter assistant. Return only one JSON object with keys: intent and confidence. Valid intents are get_managed_device_count, get_managed_device_list, get_managed_device_summary, unknown. Use get_managed_device_summary when the user asks both how many devices and what they are called. Do not invent data.",
+      },
+      {
+        role: "user",
+        content: `Question: ${question}`,
+      },
+    ]);
+
+    if (!content) {
+      return fallback;
+    }
+
+    return inventoryIntentSchema.parse(JSON.parse(extractJsonObject(content)));
+  } catch {
+    return fallback;
   }
 }
 
