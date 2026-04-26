@@ -23,8 +23,10 @@ WiFiLedStatus wifiLedStatus(LED_BUILTIN); // Use the built-in LED on ESP32
 
 unsigned long lastWifiCheck = 0;
 unsigned long lastSendData = 0;
+unsigned long lastMeterLog = 0;
 const unsigned long WIFI_CHECK_INTERVAL = 10000; // Kiểm tra WiFi mỗi 10 giây
 const unsigned long SEND_INTERVAL = 10000;       // 10 giây
+const unsigned long METER_LOG_INTERVAL = 2000;   // 2 giây
 
 void setup()
 {
@@ -127,7 +129,15 @@ void loop()
 
     if (!isnan(readings.voltage))
     {
-        // Serial.printf("V: %.1f | I: %.2f | P: %.1f | E: %.2f\n", readings.voltage, readings.current, readings.power, readings.energy);
+        if (now - lastMeterLog > METER_LOG_INTERVAL)
+        {
+            Serial.printf("PZEM OK | V: %.1f V | I: %.3f A | P: %.1f W | E: %.3f kWh\n",
+                          readings.voltage,
+                          readings.current,
+                          readings.power,
+                          readings.energy);
+            lastMeterLog = now;
+        }
 
         // Gửi dữ liệu định kỳ, không delay trong loop
         if (now - lastSendData > SEND_INTERVAL)
@@ -135,6 +145,11 @@ void loop()
             dataSender.sendData(readings.voltage, readings.current, readings.power, readings.energy, WiFi.localIP().toString());
             lastSendData = now;
         }
+    }
+    else if (now - lastMeterLog > METER_LOG_INTERVAL)
+    {
+        Serial.println("PZEM read failed: check module power, UART wiring, and GPIO16/GPIO17 RX/TX mapping.");
+        lastMeterLog = now;
     }
 
     wifiLedStatus.update();
