@@ -6,7 +6,7 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 
 - **Phase 1 completed**: backend domain foundation and fleet visibility
 - **Phase 2 partially completed**: `assistant-bot` service exists, Telegram polling baseline exists, notification queue exists, default-tenant flow exists, basic claim flow exists
-- **Phase 3 implementation completed locally**: firmware release catalog, update policy engine, remove/unclaim flow, reboot/factory reset flow, claim confirmation, bot-driven OTA confirmation, policy-gated OTA release flow, firmware identity metadata, and persisted bot sessions exist. Real Telegram credential verification, OTA success path with a hosted artifact, and longer stability testing are still pending.
+- **Phase 3 implementation is nearly complete**: firmware release catalog, update policy engine, remove/unclaim flow, reboot/factory reset flow, claim confirmation, bot-driven OTA confirmation, policy-gated OTA release flow, firmware identity metadata, persisted bot sessions, and real Telegram outbound delivery all exist. The remaining open runtime item is full OTA success against a GitHub-hosted artifact, followed by longer stability testing.
 
 ## Implemented So Far
 
@@ -19,6 +19,9 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 - Remote control command handling implemented on `meter/<deviceId>/control`
 - Firmware supports backend `reboot` and `factory_reset` commands
 - Telemetry now includes `mac_address`, `chip_family`, `chip_model`, and `board_type`
+- OTA URL reachability now uses redirect-safe HTTPS handling
+- MQTT OTA command buffer increased to `2048`
+- OTA command JSON parse buffer increased to `4096`
 
 ### Backend
 
@@ -107,6 +110,7 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 - Second-confirmation flows implemented for claim, remove, reboot, and factory reset
 - Second-confirmation flow implemented for OTA updates through release catalog
 - Pending bot state now persists in backend for default-tenant, claim, remove, reboot, factory-reset, and OTA confirmation flows
+- Real Telegram outbound delivery verified with live bot credentials
 - Basic claim flow implemented:
   - serial number
   - site selection
@@ -126,6 +130,7 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 - `SN005` remote reboot command was published and the device recovered with new telemetry
 - OTA release endpoint validation passes and refuses release versions without artifact URLs
 - Bot session persistence endpoints pass with create/read/delete verification
+- GitHub Release OTA commands now reach at least `status=received` on the live ESP32
 - The live `SN005` device is currently:
   - `claimStatus=claimed`
   - `lifecycleStatus=active`
@@ -138,8 +143,8 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 
 - Legacy direct OTA endpoint still exists for engineering dry-runs; bot OTA uses the policy-gated release endpoint
 - Groq integration exists in code path but has not been verified with real credentials in runtime
-- Local Telegram real delivery still depends on replacing placeholder credentials
-- OTA success path still depends on a hosted firmware artifact URL
+- OTA success against the hosted GitHub artifact is still incomplete beyond `received`
+- Agent-side serial reads still reboot the ESP32, so the best remaining OTA diagnosis path is a normal local terminal monitor
 
 ## Source Of Truth Files
 
@@ -154,6 +159,5 @@ Read these first in a new session:
 
 Implement the next major milestone in this order:
 
-1. real Telegram credential verification
-2. OTA success path with a hosted artifact
-3. longer stability testing
+1. OTA success path with the hosted GitHub artifact
+2. longer stability testing

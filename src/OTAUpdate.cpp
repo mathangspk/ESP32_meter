@@ -6,8 +6,17 @@
 
 bool checkOtaUrlAvailable(const String &otaUrl)
 {
+    WiFiClientSecure client;
+    client.setInsecure();
+
     HTTPClient http;
-    http.begin(otaUrl);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    if (!http.begin(client, otaUrl))
+    {
+        Serial.println("Khong the bat dau ket noi OTA URL.");
+        return false;
+    }
+
     int httpCode = http.GET();
     http.end();
     if (httpCode == 200)

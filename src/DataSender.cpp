@@ -5,8 +5,13 @@
 #include "ConfigManager.h"
 #include "OTAUpdate.h"
 
+#ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "1.0.0"
+#endif
+
+#ifndef BOARD_TYPE
 #define BOARD_TYPE "esp32doit-devkit-v1"
+#endif
 
 extern ConfigManager configManager;
 
@@ -14,7 +19,7 @@ DataSender::DataSender()
     : mqttServer("113.161.220.166"), mqttPort(1883), deviceId("5"), serialNumber("SN005"),
       client(wifiClient), bufferIndex(0), bufferCount(0)
 {
-    client.setBufferSize(512);
+    client.setBufferSize(2048);
     client.setCallback([this](char *topic, byte *payload, unsigned int length)
                        { this->callback(topic, payload, length); });
 }
@@ -108,7 +113,7 @@ void DataSender::callback(char *topic, byte *payload, unsigned int length)
     Serial.println(message);
 
     // Parse JSON
-    StaticJsonDocument<512> doc;
+    StaticJsonDocument<4096> doc;
     DeserializationError error = deserializeJson(doc, message);
     if (error)
     {

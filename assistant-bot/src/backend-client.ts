@@ -54,7 +54,7 @@ const notificationSchema = z.object({
   type: z.string(),
   channel: z.string(),
   targetExternalId: z.string(),
-  title: z.string().optional(),
+  title: z.string().nullish(),
   text: z.string(),
   payload: z.unknown().optional(),
   status: z.string(),

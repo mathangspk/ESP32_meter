@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Finish real-credential Telegram verification, OTA success-path verification, and longer stability testing.
+Finish the GitHub-hosted OTA success path and then run a longer stability check.
 
 ## Confirmed State
 
@@ -129,14 +129,28 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
   - `GET /internal/bot-sessions/:chatId`
   - `PUT /internal/bot-sessions/:chatId`
   - `DELETE /internal/bot-sessions/:chatId`
+- Real Telegram delivery has now been verified with the live bot token and operator chat ID
+- Direct `sendMessage` verification to Telegram succeeded
+- Mongo `notification_queue` delivery through `assistant-bot` to Telegram succeeded with status `sent`
+- Runtime bug fixed in `assistant-bot`: queued notifications can now parse `title: null`
+- OTA release builds can now be produced with `platformio.ota.ini` and `OTA_FIRMWARE_VERSION=...`
+- Firmware OTA handling was hardened for GitHub-hosted assets:
+  - OTA URL reachability check now uses `WiFiClientSecure` with `setInsecure()` and strict redirect following
+  - MQTT command buffer increased from `512` to `2048`
+  - OTA command JSON parse buffer increased from `512` to `4096`
+- GitHub Release assets were successfully created for OTA verification builds:
+  - `firmware-v1.0.1-ota-verification-1`
+  - `firmware-v1.0.1-ota-verification-2`
+  - `firmware-v1.0.1-ota-verification-3`
+- Firmware release catalog now contains OTA verification versions with URLs and SHA256 digests
 - Compose local and production stacks now include the `assistant-bot` service
 - GitHub workflows now build and publish `assistant-bot` images as well as the backend image
 
 ## Next Recommended Steps
 
-1. Replace placeholder Telegram credentials with real values and verify end-to-end bot command and queued alert delivery.
-2. Host a real firmware artifact and test the OTA success path.
-3. Run a longer stability check after real bot credentials are configured.
+1. Observe the live ESP32 serial log from a normal local terminal during one more OTA attempt so the post-`received` failure point can be seen without the agent-induced reboot side effect.
+2. Finish the OTA success path for the latest verification release.
+3. Run a longer stability check after OTA success is confirmed.
 
 ## Known Constraints
 
@@ -149,8 +163,9 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - A native Homebrew `mosquitto` service is running on the macOS host and currently owns port `1883`
 - The current OTA implementation stores `sha256` metadata but does not enforce checksum validation in firmware yet
 - The legacy direct `POST /ota/jobs` endpoint still accepts explicit URL payloads for engineering dry-runs; user-facing bot OTA uses the policy-gated release endpoint
-- Real Telegram delivery has not been verified because local env still uses placeholder bot credentials
-- OTA success path has not been verified because no real hosted firmware artifact URL has been provided yet
+- Reading USB serial from the agent still reboots the ESP32, which makes OTA runtime diagnosis less reliable inside this shell than in a normal local terminal
+- Telegram outbound is verified, but inbound command verification through live Telegram chat is still not fully captured in this session log
+- GitHub-hosted OTA has improved from `URL is not reachable` to live `received` status, but it still does not reach `downloading` or `success` yet
 
 ## Most Relevant Commands
 
@@ -176,6 +191,8 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Sensitive action workflow milestone for claim/remove/reboot/factory-reset: passed
 - Policy-gated bot OTA milestone: passed
 - Persisted bot session milestone: passed
+- Real Telegram outbound verification milestone: passed
+- GitHub-hosted OTA compatibility hardening milestone: passed
 - Evidence: device emitted a valid `PZEM OK` line with voltage and energy data
 - Evidence: `/healthz` returned `{"status":"ok","uptimeSeconds":7,"mqttConnected":true,"mongodbConnected":true}`
 - Evidence: MongoDB stored test telemetry and state for device `5`
@@ -202,6 +219,10 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Evidence: `POST /devices/SN005/ota` with version `1.0.0` correctly returned `Firmware release does not have a downloadable URL`, so no OTA job was started without a catalog artifact URL
 - Evidence: `POST /devices/NO_SUCH_DEVICE/ota` correctly returned `Device not found`
 - Evidence: `PUT /internal/bot-sessions/test-chat`, `GET /internal/bot-sessions/test-chat`, and `DELETE /internal/bot-sessions/test-chat` returned expected persisted state and `204` delete status
+- Evidence: direct Telegram `sendMessage` to chat `2070483485` succeeded with text `OpenCode verification message`
+- Evidence: a test `notification_queue` record with target `2070483485` was delivered and stored as `status=sent`
+- Evidence: OTA verification release assets were created on GitHub Releases and registered in backend firmware catalog with SHA256 values
+- Evidence: the latest OTA job `a5c7364c-4e0f-450f-8f8e-15e118734e1b` reached `status=received` against the long signed GitHub asset URL, confirming that the enlarged MQTT and JSON buffers are working
 
 ## Suggested New Session Prompt
 
