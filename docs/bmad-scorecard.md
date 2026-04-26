@@ -137,3 +137,31 @@ Result:
   outcome: OTA success path is now verified end-to-end and the device reports firmware 1.0.1-ota-verification-3
   notes: serial access from the agent still reboots the board, so future stability runs should minimize serial reads
 ```
+
+## 2026-04-26 Telegram Analytics Session
+
+```text
+Date: 2026-04-26
+Task: Add backend analytics summary and natural-language Telegram Q&A for energy, peak-hour, and current readings
+BMAD path:
+  Brief: support natural-language power questions while keeping numeric calculations in the backend
+  Mapping: inspect firmware UTC timestamps, Mongo telemetry storage, site metadata, and assistant-bot Groq flow
+  Architecture: keep UTC storage, add site timezone, expose one analytics summary endpoint, and let Groq handle intent plus phrasing
+  Delivery: patch backend analytics summary logic and wire assistant-bot natural-language analytics routing
+  Review: verify TypeScript builds for backend and assistant-bot after the new endpoint and bot flow changes
+Model usage:
+  cheap_steps: 3
+  build_steps: 4
+  deep_steps: 1
+  escalations: 0
+Execution:
+  files_changed: 7
+  verify_commands: npm run build (backend); npm run build (assistant-bot)
+  verify_passed: yes
+  rework_loops: 0
+Handoff:
+  handoff_updated: yes
+Result:
+  outcome: backend and bot now support a single analytics summary path and natural-language Telegram question handling for current readings and same-day usage analytics
+  notes: live Telegram verification still remains, especially for device disambiguation and real data phrasing
+```

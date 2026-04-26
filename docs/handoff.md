@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Run a longer stability check on the recovered MQTT plus OTA path.
+Verify natural-language Telegram analytics questions against the new backend summary path.
 
 ## Current BMAD Phase
 
@@ -117,6 +117,16 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - Backend now evaluates firmware policy per device and fleet:
   - `GET /devices/:deviceId/firmware-policy`
   - `GET /admin/firmware/policy`
+- Backend now exposes analytics summary for natural-language bot questions:
+  - `GET /devices/:deviceId/analytics/summary`
+- Site-level timezone is now the source of truth for analytics day boundaries, with a fallback to `Asia/Ho_Chi_Minh` when legacy site records do not have a timezone yet
+- `assistant-bot` now parses natural-language analytics questions for:
+  - current voltage
+  - current power
+  - current voltage plus power summary
+  - today's energy usage
+  - today's peak hour by highest average power
+- `assistant-bot` now resolves devices from accessible tenant or admin scope before asking Groq to phrase an analytics answer naturally in Vietnamese
 - Backend now exposes firmware release management endpoints:
   - `GET /admin/firmware/releases`
   - `POST /admin/firmware/releases`
@@ -176,7 +186,7 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 
 1. Run a longer stability check with `SN005` on firmware `1.0.1-ota-verification-3` and confirm telemetry stays healthy over time.
 2. Verify OTA once more without serial intervention only if you want an extra confidence pass on the new firmware image.
-3. Decide whether the improved OTA/NTP logic should be turned into a verified milestone commit.
+3. Run live Telegram checks for questions like `hom nay dung bao nhieu kWh`, `gio nao dung dien nhieu nhat`, and `hien tai dien ap cong suat bao nhieu`.
 
 ## Known Constraints
 
@@ -208,6 +218,7 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Serial verification: passed
 - Backend TypeScript build: passed
 - Backend TypeScript typecheck: passed
+- Backend analytics summary build path: passed
 - Local container stack verification: passed with `colima`
 - Real ESP32 to local backend ingest: passed
 - OTA control plane dry-run with real ESP32: passed
@@ -218,6 +229,7 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Policy-gated bot OTA milestone: passed
 - Persisted bot session milestone: passed
 - Real Telegram outbound verification milestone: passed
+- Natural-language Telegram analytics build milestone: passed
 - GitHub-hosted OTA compatibility hardening milestone: passed
 - Evidence: device emitted a valid `PZEM OK` line with voltage and energy data
 - Evidence: `/healthz` returned `{"status":"ok","uptimeSeconds":7,"mqttConnected":true,"mongodbConnected":true}`

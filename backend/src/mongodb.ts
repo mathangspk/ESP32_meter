@@ -60,6 +60,7 @@ export type SiteRecord = {
   siteId: string;
   tenantId: string;
   name: string;
+  timezone?: string;
   status: "active" | "inactive";
   createdAt: Date;
   updatedAt: Date;
@@ -268,6 +269,84 @@ export type FirmwarePolicyEvaluation = {
   recommendedRelease?: FirmwareReleaseRecord;
   message: string;
 };
+
+export type DeviceAnalyticsSummary = {
+  serialNumber: string;
+  deviceId: string;
+  displayName?: string;
+  tenantId?: string;
+  siteId?: string;
+  siteTimezone: string;
+  dayStart: Date;
+  dayEnd: Date;
+  currentVoltage?: number;
+  currentPower?: number;
+  currentSeenAt?: Date;
+  todayEnergyKwh?: number;
+  peakHourStart?: Date;
+  peakHourEnd?: Date;
+  peakHourAveragePower?: number;
+  sampleCount: number;
+  dataStatus: "ok" | "insufficient_data" | "counter_reset_detected";
+  messages: string[];
+};
+
+const DEFAULT_SITE_TIMEZONE = "Asia/Ho_Chi_Minh";
+
+function getTimeZoneParts(date: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const getValue = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value ?? "0");
+  return {
+    year: getValue("year"),
+    month: getValue("month"),
+    day: getValue("day"),
+    hour: getValue("hour"),
+    minute: getValue("minute"),
+    second: getValue("second"),
+  };
+}
+
+function zonedDateTimeToUtc(parts: { year: number; month: number; day: number; hour?: number; minute?: number; second?: number }, timeZone: string) {
+  const utcGuess = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour ?? 0, parts.minute ?? 0, parts.second ?? 0, 0),
+  );
+  const zonedGuess = getTimeZoneParts(utcGuess, timeZone);
+  const zonedGuessUtc = Date.UTC(
+    zonedGuess.year,
+    zonedGuess.month - 1,
+    zonedGuess.day,
+    zonedGuess.hour,
+    zonedGuess.minute,
+    zonedGuess.second,
+    0,
+  );
+
+  return new Date(utcGuess.getTime() - (zonedGuessUtc - utcGuess.getTime()));
+}
+
+function getLocalDayBounds(now: Date, timeZone: string) {
+  const localNow = getTimeZoneParts(now, timeZone);
+  const dayStart = zonedDateTimeToUtc({ year: localNow.year, month: localNow.month, day: localNow.day }, timeZone);
+  const nextDaySeed = new Date(Date.UTC(localNow.year, localNow.month - 1, localNow.day + 1, 0, 0, 0, 0));
+  const nextDayParts = {
+    year: nextDaySeed.getUTCFullYear(),
+    month: nextDaySeed.getUTCMonth() + 1,
+    day: nextDaySeed.getUTCDate(),
+  };
+  const dayEnd = zonedDateTimeToUtc(nextDayParts, timeZone);
+  return { dayStart, dayEnd };
+}
 
 type FleetSummary = {
   totals: {
@@ -703,6 +782,91 @@ export class MongoService {
       .toArray();
 
     return results[0] ?? null;
+  }
+
+  async getDeviceAnalyticsSummary(identifier: string): Promise<DeviceAnalyticsSummary | null> {
+    const device = await this.getDeviceHealth(identifier);
+    if (!device) {
+      return null;
+    }
+
+    const site = device.siteId ? await this.sites.findOne({ siteId: device.siteId }) : null;
+    const siteTimezone = site?.timezone || DEFAULT_SITE_TIMEZONE;
+    const { dayStart, dayEnd } = getLocalDayBounds(new Date(), siteTimezone);
+    const [firstTelemetry, lastTelemetry, peakHourRows, sampleCount] = await Promise.all([
+      this.telemetry.findOne(
+        { serialNumber: device.serialNumber, timestamp: { $gte: dayStart, $lt: dayEnd } },
+        { sort: { timestamp: 1 } },
+      ),
+      this.telemetry.findOne(
+        { serialNumber: device.serialNumber, timestamp: { $gte: dayStart, $lt: dayEnd } },
+        { sort: { timestamp: -1 } },
+      ),
+      this.telemetry
+        .aggregate<{ hourStart: Date; averagePower: number }>([
+          { $match: { serialNumber: device.serialNumber, timestamp: { $gte: dayStart, $lt: dayEnd } } },
+          {
+            $group: {
+              _id: {
+                $dateTrunc: {
+                  date: "$timestamp",
+                  unit: "hour",
+                  timezone: siteTimezone,
+                },
+              },
+              averagePower: { $avg: "$power" },
+            },
+          },
+          { $project: { _id: 0, hourStart: "$_id", averagePower: 1 } },
+          { $sort: { averagePower: -1, hourStart: 1 } },
+          { $limit: 1 },
+        ])
+        .toArray(),
+      this.telemetry.countDocuments({ serialNumber: device.serialNumber, timestamp: { $gte: dayStart, $lt: dayEnd } }),
+    ]);
+
+    const messages: string[] = [];
+    let todayEnergyKwh: number | undefined;
+    let dataStatus: DeviceAnalyticsSummary["dataStatus"] = "ok";
+
+    if (!firstTelemetry || !lastTelemetry || sampleCount < 2) {
+      dataStatus = "insufficient_data";
+      messages.push("Not enough telemetry samples are available for today yet.");
+    } else {
+      const delta = lastTelemetry.energy - firstTelemetry.energy;
+      if (delta < 0) {
+        dataStatus = "counter_reset_detected";
+        messages.push("Energy counter appears to have reset during the selected day.");
+      } else {
+        todayEnergyKwh = Number(delta.toFixed(3));
+      }
+    }
+
+    if (!site?.timezone) {
+      messages.push(`Site timezone is missing, so analytics used the fallback timezone ${DEFAULT_SITE_TIMEZONE}.`);
+    }
+
+    const peakHour = peakHourRows[0];
+    return {
+      serialNumber: device.serialNumber,
+      deviceId: device.deviceId,
+      displayName: device.displayName,
+      tenantId: device.tenantId,
+      siteId: device.siteId,
+      siteTimezone,
+      dayStart,
+      dayEnd,
+      currentVoltage: device.state?.lastVoltage,
+      currentPower: device.state?.lastPower,
+      currentSeenAt: device.state?.lastSeenAt,
+      todayEnergyKwh,
+      peakHourStart: peakHour?.hourStart,
+      peakHourEnd: peakHour ? new Date(peakHour.hourStart.getTime() + 60 * 60 * 1000) : undefined,
+      peakHourAveragePower: peakHour ? Number(peakHour.averagePower.toFixed(1)) : undefined,
+      sampleCount,
+      dataStatus,
+      messages,
+    };
   }
 
   async getFleetSummary(): Promise<FleetSummary> {
@@ -1393,6 +1557,7 @@ export class MongoService {
         $set: {
           tenantId: config.BOOTSTRAP_TENANT_ID,
           name: config.BOOTSTRAP_SITE_NAME,
+          timezone: DEFAULT_SITE_TIMEZONE,
           status: "active",
           updatedAt: now,
         },

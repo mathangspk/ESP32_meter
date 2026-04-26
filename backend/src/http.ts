@@ -81,6 +81,16 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
     res.json(policy);
   });
 
+  app.get("/devices/:deviceId/analytics/summary", async (req, res) => {
+    const summary = await mongoService.getDeviceAnalyticsSummary(req.params.deviceId);
+    if (!summary) {
+      res.status(404).json({ error: "Device not found" });
+      return;
+    }
+
+    res.json(summary);
+  });
+
   app.post("/devices/claim", async (req, res) => {
     const body = req.body as {
       serialNumber?: string;

@@ -1,7 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { backendClient, Membership } from "./backend-client";
 import { config } from "./config";
-import { askGroq } from "./groq";
+import { askGroq, parseAnalyticsIntent, renderAnalyticsAnswer } from "./groq";
 import { logger } from "./logger";
 import { getUpdates, sendMessage, TelegramUpdate } from "./telegram";
 
@@ -168,6 +168,91 @@ function getActionLabel(action: "remove" | "reboot" | "factory_reset"): string {
     return "factory reset";
   }
   return action;
+}
+
+function normalizeIdentifier(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+async function getAccessibleDevices(user: { defaultTenantId?: string }, memberships: Membership[]) {
+  if (isPlatformAdmin(memberships)) {
+    return backendClient.getDevices(100);
+  }
+
+  if (!user.defaultTenantId) {
+    return [];
+  }
+
+  return backendClient.getDevicesForTenant(user.defaultTenantId, 100);
+}
+
+async function resolveAccessibleDevice(identifier: string | undefined, user: { defaultTenantId?: string }, memberships: Membership[]) {
+  const devices = await getAccessibleDevices(user, memberships);
+  if (devices.length === 0) {
+    return { devices, device: undefined };
+  }
+
+  if (!identifier) {
+    return { devices, device: devices.length === 1 ? devices[0] : undefined };
+  }
+
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  const exactMatch = devices.find(
+    (device) =>
+      normalizeIdentifier(device.serialNumber) === normalizedIdentifier ||
+      normalizeIdentifier(device.deviceId) === normalizedIdentifier ||
+      normalizeIdentifier(device.displayName ?? "") === normalizedIdentifier,
+  );
+  if (exactMatch) {
+    return { devices, device: exactMatch };
+  }
+
+  const partialMatches = devices.filter((device) => normalizeIdentifier(device.displayName ?? "").includes(normalizedIdentifier));
+  return { devices, device: partialMatches.length === 1 ? partialMatches[0] : undefined };
+}
+
+function formatAnalyticsFallback(summary: Awaited<ReturnType<typeof backendClient.getDeviceAnalyticsSummary>>): string {
+  const label = summary.displayName ?? summary.serialNumber;
+  const parts = [
+    `${label} dang dung mui gio ${summary.siteTimezone}.`,
+    summary.currentVoltage !== undefined ? `Dien ap hien tai khoang ${summary.currentVoltage.toFixed(1)} V.` : undefined,
+    summary.currentPower !== undefined ? `Cong suat hien tai khoang ${summary.currentPower.toFixed(1)} W.` : undefined,
+    summary.todayEnergyKwh !== undefined ? `Hom nay da dung khoang ${summary.todayEnergyKwh.toFixed(3)} kWh.` : undefined,
+    summary.peakHourStart && summary.peakHourEnd && summary.peakHourAveragePower !== undefined
+      ? `Khung gio dung dien nhieu nhat hom nay la ${new Date(summary.peakHourStart).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: summary.siteTimezone })}-${new Date(summary.peakHourEnd).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: summary.siteTimezone })}, cong suat trung binh khoang ${summary.peakHourAveragePower.toFixed(1)} W.`
+      : undefined,
+    ...summary.messages,
+  ];
+
+  return parts.filter(Boolean).join(" ");
+}
+
+async function handleAnalyticsQuestion(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
+  const intent = await parseAnalyticsIntent(text);
+  if (intent.intent === "unknown") {
+    return false;
+  }
+
+  const { devices, device } = await resolveAccessibleDevice(intent.identifier, user, memberships);
+  if (devices.length === 0) {
+    await sendMessage(chatId, "Khong tim thay thiet bi nao trong pham vi ban co quyen xem.");
+    return true;
+  }
+
+  if (!device) {
+    await sendMessage(
+      chatId,
+      intent.identifier
+        ? "Minh chua xac dinh duoc chinh xac thiet bi ban muon hoi. Hay gui lai serial, device ID, hoac ten thiet bi dung hon."
+        : `Ban muon hoi thiet bi nao? Hien co: ${devices.map((candidate) => candidate.displayName ?? candidate.serialNumber).join(", ")}`,
+    );
+    return true;
+  }
+
+  const summary = await backendClient.getDeviceAnalyticsSummary(device.serialNumber);
+  const answer = await renderAnalyticsAnswer(text, intent.intent, summary);
+  await sendMessage(chatId, answer ?? formatAnalyticsFallback(summary));
+  return true;
 }
 
 async function canManageDevice(identifier: string, userDefaultTenantId: string | undefined, memberships: Membership[]): Promise<boolean> {
@@ -694,6 +779,10 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
 }
 
 async function handleNaturalLanguage(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
+  if (await handleAnalyticsQuestion(chatId, text, user, memberships)) {
+    return;
+  }
+
   const context = isPlatformAdmin(memberships)
     ? { fleetSummary: await backendClient.getFleetSummary() }
     : {

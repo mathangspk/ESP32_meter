@@ -102,7 +102,29 @@ const siteSchema = z.object({
   siteId: z.string(),
   tenantId: z.string(),
   name: z.string(),
+  timezone: z.string().optional(),
   status: z.string(),
+});
+
+const deviceAnalyticsSummarySchema = z.object({
+  serialNumber: z.string(),
+  deviceId: z.string(),
+  displayName: z.string().optional(),
+  tenantId: z.string().optional(),
+  siteId: z.string().optional(),
+  siteTimezone: z.string(),
+  dayStart: z.string(),
+  dayEnd: z.string(),
+  currentVoltage: z.number().optional(),
+  currentPower: z.number().optional(),
+  currentSeenAt: z.string().optional(),
+  todayEnergyKwh: z.number().optional(),
+  peakHourStart: z.string().optional(),
+  peakHourEnd: z.string().optional(),
+  peakHourAveragePower: z.number().optional(),
+  sampleCount: z.number(),
+  dataStatus: z.enum(["ok", "insufficient_data", "counter_reset_detected"]),
+  messages: z.array(z.string()),
 });
 
 const firmwareReleaseSchema = z
@@ -219,8 +241,13 @@ export const backendClient = {
       z.array(deviceSchema),
     ),
 
+  getDevices: (limit = 50) => request(`/devices?limit=${limit}`, { method: "GET" }, z.array(deviceSchema)),
+
   getDeviceHealth: (identifier: string) =>
     request(`/devices/${encodeURIComponent(identifier)}/health`, { method: "GET" }, deviceSchema),
+
+  getDeviceAnalyticsSummary: (identifier: string) =>
+    request(`/devices/${encodeURIComponent(identifier)}/analytics/summary`, { method: "GET" }, deviceAnalyticsSummarySchema),
 
   getFleetSummary: () => request("/admin/fleet/summary", { method: "GET" }, fleetSummarySchema),
 
