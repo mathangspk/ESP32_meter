@@ -41,6 +41,109 @@ Expected output per phase:
 
 Do not skip straight to Delivery for non-trivial work unless the task is already fully obvious from the current repo state.
 
+## Delegation Policy
+
+Treat this file as a delegation policy, not as a runtime scheduler.
+
+- The main agent owns final planning, implementation decisions, verification decisions, commit/push steps, and handoff updates.
+- Use `explore` before non-trivial cross-file work when the relevant code path is not already fully known.
+- Mapping work should default to `explore`.
+- Use `explore` for open-ended repo mapping, file discovery, endpoint tracing, schema tracing, and call-flow discovery.
+- Use `general` for cross-file review, operational risk review, tradeoff research, and broader reasoning after an implementation pass.
+- Use `ops-light` for simple Git chores such as `git status`, `git diff`, `git log`, `git add`, `git commit`, and `git push` when that subagent is available in the runtime.
+- Do not use subagents for single-file trivial edits or obvious local changes.
+- For firmware plus backend plus bot interactions, do a mapping pass first instead of jumping straight into code edits.
+- After non-trivial multi-file changes, run a separate review pass before treating the work as complete.
+
+## Phase Ownership
+
+- Brief: main agent
+- Mapping: prefer `explore`
+- Architecture: main agent
+- Delivery: main agent
+- Review: prefer `general` for non-trivial or runtime-sensitive work
+
+The main agent may skip delegation only when the scope is already fully known and the work is trivially local.
+
+## Subagent Contracts
+
+When delegating work, the main agent must provide a concrete task contract.
+
+### `explore`
+
+Use for repo exploration and mapping.
+
+Required prompt inputs:
+
+- task goal
+- relevant feature area or path hints
+- desired thoroughness level
+- whether the subagent is read-only or may propose edits
+- exact output format expected back
+
+Expected output:
+
+- relevant files
+- key functions, endpoints, or flows
+- likely failure points or risk points
+- open questions if the map is still incomplete
+
+### `general`
+
+Use for review, research, and broad reasoning.
+
+Required prompt inputs:
+
+- problem statement or review target
+- affected areas
+- whether the task is research-only or review-only
+- exact output format expected back
+- verification expectations if applicable
+
+Expected output:
+
+- findings or conclusions
+- severity or confidence where relevant
+- recommended next action
+- testing or verification gaps
+
+### `ops-light`
+
+Use for simple Git housekeeping when supported by the current OpenCode runtime.
+
+Required prompt inputs:
+
+- the exact Git outcome needed
+- any commit scope restrictions
+- whether push is requested
+- exact output format expected back
+
+Expected output:
+
+- relevant Git status or diff summary
+- commit result if one was requested
+- push result if one was requested
+- any Git safety blockers
+
+## Visibility Rules
+
+Delegation should be visible in the session.
+
+- Before calling a subagent, the main agent must send a short commentary update naming the subagent, why it is being used, and what output is expected.
+- After a subagent returns, the main agent must summarize the result and explain how it affects the next step.
+- Keep delegation commentary short and operational. Do not dump the full prompt to the user unless they ask.
+- If a task is completed entirely in the main agent, say so only when that choice is notable or relevant.
+
+## Runtime Limits
+
+Be explicit about what this file can and cannot do.
+
+- `AGENTS.md` defines repository policy and delegation guidance. It does not itself spawn or route agents.
+- Available subagent types come from the OpenCode runtime, not from this repository.
+- The main agent must explicitly invoke subagents through runtime tools.
+- Model-per-subagent routing may not be directly configurable in the current runtime.
+- When exact model routing is not enforceable, treat the routing table in this repo as governance and audit intent rather than a hard guarantee.
+
 ## Model Routing Policy
 
 Default to cheaper models first and escalate only when needed.

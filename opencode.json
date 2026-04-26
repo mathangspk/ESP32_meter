@@ -1,0 +1,30 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "explore": {
+      "mode": "subagent",
+      "model": "opencode/minimax-m2.5-free",
+      "temperature": 0.1
+    },
+    "ops-light": {
+      "description": "Handles simple Git housekeeping such as status, diff, add, commit, and push.",
+      "mode": "subagent",
+      "model": "opencode/minimax-m2.5-free",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "webfetch": "deny",
+        "bash": {
+          "*": "deny",
+          "git status*": "allow",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git add *": "allow",
+          "git commit *": "allow",
+          "git push": "allow",
+          "git push *": "allow"
+        }
+      }
+    }
+  }
+}
