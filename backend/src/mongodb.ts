@@ -245,6 +245,13 @@ export type NotificationQueueRecord = {
   updatedAt: Date;
 };
 
+export type BotSessionRecord = {
+  chatId: string;
+  state: Document;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 type DeviceListRecord = DeviceRecord & {
   state?: DeviceStateRecord | null;
 };
@@ -306,6 +313,7 @@ export class MongoService {
   private otaStatusEvents!: Collection<OtaStatusEventRecord>;
   private notificationQueue!: Collection<NotificationQueueRecord>;
   private firmwareReleases!: Collection<FirmwareReleaseRecord>;
+  private botSessions!: Collection<BotSessionRecord>;
 
   async connect(): Promise<void> {
     await this.client.connect();
@@ -326,6 +334,7 @@ export class MongoService {
     this.otaStatusEvents = this.db.collection<OtaStatusEventRecord>("ota_status_events");
     this.notificationQueue = this.db.collection<NotificationQueueRecord>("notification_queue");
     this.firmwareReleases = this.db.collection<FirmwareReleaseRecord>("firmware_releases");
+    this.botSessions = this.db.collection<BotSessionRecord>("bot_sessions");
     await this.ensureIndexes();
     await this.bootstrapPlatformAdmin();
     await this.bootstrapFirmwareRelease();
@@ -569,6 +578,34 @@ export class MongoService {
     return this.notificationQueue
       .find({ status: "pending" }, { sort: { createdAt: 1 }, limit })
       .toArray();
+  }
+
+  async getBotSession(chatId: string): Promise<BotSessionRecord | null> {
+    return this.botSessions.findOne({ chatId });
+  }
+
+  async upsertBotSession(chatId: string, state: Document): Promise<BotSessionRecord | null> {
+    const now = new Date();
+    await this.botSessions.updateOne(
+      { chatId },
+      {
+        $set: {
+          state,
+          updatedAt: now,
+        },
+        $setOnInsert: {
+          chatId,
+          createdAt: now,
+        },
+      },
+      { upsert: true },
+    );
+
+    return this.getBotSession(chatId);
+  }
+
+  async deleteBotSession(chatId: string): Promise<void> {
+    await this.botSessions.deleteOne({ chatId });
   }
 
   async markNotificationProcessing(notificationId: ObjectId): Promise<void> {
@@ -1474,6 +1511,8 @@ export class MongoService {
     await this.notificationQueue.createIndex({ channel: 1, targetExternalId: 1, createdAt: -1 });
     await this.firmwareReleases.createIndex({ version: 1, chipFamily: 1, chipModel: 1, boardType: 1 }, { unique: true });
     await this.firmwareReleases.createIndex({ isActive: 1, releasedAt: -1 });
+    await this.botSessions.createIndex({ chatId: 1 }, { unique: true });
+    await this.botSessions.createIndex({ updatedAt: -1 });
   }
 }
 

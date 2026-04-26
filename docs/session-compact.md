@@ -6,7 +6,7 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 
 - **Phase 1 completed**: backend domain foundation and fleet visibility
 - **Phase 2 partially completed**: `assistant-bot` service exists, Telegram polling baseline exists, notification queue exists, default-tenant flow exists, basic claim flow exists
-- **Phase 3 mostly completed**: firmware release catalog, update policy engine, remove/unclaim flow, reboot/factory reset flow, claim confirmation, bot-driven OTA confirmation, policy-gated OTA release flow, and firmware identity metadata exist; persisted onboarding sessions and full Groq-enabled Q&A in real operation are still pending
+- **Phase 3 implementation completed locally**: firmware release catalog, update policy engine, remove/unclaim flow, reboot/factory reset flow, claim confirmation, bot-driven OTA confirmation, policy-gated OTA release flow, firmware identity metadata, and persisted bot sessions exist. Real Telegram credential verification, OTA success path with a hosted artifact, and longer stability testing are still pending.
 
 ## Implemented So Far
 
@@ -74,6 +74,11 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
   - target version must exist in compatible release catalog
   - target release must not be `unsupported`
   - target release must have a URL
+- Bot session persistence implemented:
+  - `bot_sessions` collection
+  - `GET /internal/bot-sessions/:chatId`
+  - `PUT /internal/bot-sessions/:chatId`
+  - `DELETE /internal/bot-sessions/:chatId`
 
 ### Assistant Bot
 
@@ -101,6 +106,7 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
   - `/ota_update <serial_or_device_id> <firmware_version>`
 - Second-confirmation flows implemented for claim, remove, reboot, and factory reset
 - Second-confirmation flow implemented for OTA updates through release catalog
+- Pending bot state now persists in backend for default-tenant, claim, remove, reboot, factory-reset, and OTA confirmation flows
 - Basic claim flow implemented:
   - serial number
   - site selection
@@ -119,6 +125,7 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 - Firmware upload passed with remote control and telemetry metadata changes
 - `SN005` remote reboot command was published and the device recovered with new telemetry
 - OTA release endpoint validation passes and refuses release versions without artifact URLs
+- Bot session persistence endpoints pass with create/read/delete verification
 - The live `SN005` device is currently:
   - `claimStatus=claimed`
   - `lifecycleStatus=active`
@@ -129,12 +136,10 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 
 ## Important Current Constraints
 
-- `assistant-bot` onboarding state is still in memory; it is not yet persisted in backend onboarding sessions
-- Onboarding/confirmation state is still in-memory inside `assistant-bot`
-- OTA job creation is not yet automatically gated by firmware policy
 - Legacy direct OTA endpoint still exists for engineering dry-runs; bot OTA uses the policy-gated release endpoint
 - Groq integration exists in code path but has not been verified with real credentials in runtime
 - Local Telegram real delivery still depends on replacing placeholder credentials
+- OTA success path still depends on a hosted firmware artifact URL
 
 ## Source Of Truth Files
 
@@ -149,6 +154,6 @@ Read these first in a new session:
 
 Implement the next major milestone in this order:
 
-1. persisted onboarding sessions
-2. real Telegram credential verification
-3. OTA success path with a hosted artifact
+1. real Telegram credential verification
+2. OTA success path with a hosted artifact
+3. longer stability testing

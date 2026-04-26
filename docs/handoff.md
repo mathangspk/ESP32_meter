@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Finish the remaining management workflow on top of the working `assistant-bot`: persisted onboarding sessions.
+Finish real-credential Telegram verification, OTA success-path verification, and longer stability testing.
 
 ## Confirmed State
 
@@ -123,15 +123,20 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - The policy-gated OTA endpoint only creates an OTA job when the requested version exists in the compatible firmware release catalog, is not `unsupported`, and has a downloadable URL
 - `assistant-bot` now has second-confirmation OTA flow through:
   - `/ota_update <serial_or_device_id> <firmware_version>`
+- Backend now persists bot conversation state in `bot_sessions`
+- `assistant-bot` no longer relies on in-memory pending state for claim, default-tenant, remove, reboot, factory-reset, or OTA confirmation flows
+- New internal bot session APIs:
+  - `GET /internal/bot-sessions/:chatId`
+  - `PUT /internal/bot-sessions/:chatId`
+  - `DELETE /internal/bot-sessions/:chatId`
 - Compose local and production stacks now include the `assistant-bot` service
 - GitHub workflows now build and publish `assistant-bot` images as well as the backend image
 
 ## Next Recommended Steps
 
-1. Extend claim/onboarding to persist full onboarding session state in the backend instead of temporary in-memory bot state.
-2. Replace placeholder Telegram credentials with real values and verify end-to-end bot command and queued alert delivery.
-3. Host a real firmware artifact and test the OTA success path.
-4. Run a longer stability check after real bot credentials are configured.
+1. Replace placeholder Telegram credentials with real values and verify end-to-end bot command and queued alert delivery.
+2. Host a real firmware artifact and test the OTA success path.
+3. Run a longer stability check after real bot credentials are configured.
 
 ## Known Constraints
 
@@ -143,9 +148,9 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - Reading the USB serial port from the agent resets the ESP32, so serial captures should be treated as reboot-triggering actions in this environment
 - A native Homebrew `mosquitto` service is running on the macOS host and currently owns port `1883`
 - The current OTA implementation stores `sha256` metadata but does not enforce checksum validation in firmware yet
-- `assistant-bot` service does not exist yet, so queued notifications are currently stored but not delivered
-- Bot onboarding state is still in memory inside `assistant-bot` and will be lost on restart until backend onboarding sessions are implemented
 - The legacy direct `POST /ota/jobs` endpoint still accepts explicit URL payloads for engineering dry-runs; user-facing bot OTA uses the policy-gated release endpoint
+- Real Telegram delivery has not been verified because local env still uses placeholder bot credentials
+- OTA success path has not been verified because no real hosted firmware artifact URL has been provided yet
 
 ## Most Relevant Commands
 
@@ -170,6 +175,7 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Firmware release policy milestone: passed
 - Sensitive action workflow milestone for claim/remove/reboot/factory-reset: passed
 - Policy-gated bot OTA milestone: passed
+- Persisted bot session milestone: passed
 - Evidence: device emitted a valid `PZEM OK` line with voltage and energy data
 - Evidence: `/healthz` returned `{"status":"ok","uptimeSeconds":7,"mqttConnected":true,"mongodbConnected":true}`
 - Evidence: MongoDB stored test telemetry and state for device `5`
@@ -195,6 +201,7 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Evidence: after the reboot command, `SN005` published telemetry again and backend state returned to `isOffline=false`
 - Evidence: `POST /devices/SN005/ota` with version `1.0.0` correctly returned `Firmware release does not have a downloadable URL`, so no OTA job was started without a catalog artifact URL
 - Evidence: `POST /devices/NO_SUCH_DEVICE/ota` correctly returned `Device not found`
+- Evidence: `PUT /internal/bot-sessions/test-chat`, `GET /internal/bot-sessions/test-chat`, and `DELETE /internal/bot-sessions/test-chat` returned expected persisted state and `204` delete status
 
 ## Suggested New Session Prompt
 

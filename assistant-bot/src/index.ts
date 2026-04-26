@@ -53,8 +53,22 @@ type PendingState =
     }
   | undefined;
 
-const pendingStates = new Map<number, PendingState>();
 const telegramEnabled = !config.TELEGRAM_BOT_TOKEN.includes("placeholder");
+
+type ActivePendingState = Exclude<PendingState, undefined>;
+
+async function getPendingState(chatId: number): Promise<PendingState> {
+  const session = await backendClient.getBotSession(chatId);
+  return session?.state as ActivePendingState | undefined;
+}
+
+async function setPendingState(chatId: number, state: ActivePendingState): Promise<void> {
+  await backendClient.saveBotSession(chatId, state);
+}
+
+async function clearPendingState(chatId: number): Promise<void> {
+  await backendClient.deleteBotSession(chatId);
+}
 
 function isPlatformAdmin(memberships: Membership[]): boolean {
   return memberships.some((membership) => membership.role === "platform_admin");
@@ -174,7 +188,7 @@ async function ensureDefaultTenant(chatId: number, userId: string, memberships: 
     return true;
   }
 
-  pendingStates.set(chatId, {
+  await setPendingState(chatId, {
     kind: "awaiting_default_tenant",
     userId,
     memberships,
@@ -188,7 +202,7 @@ async function ensureDefaultTenant(chatId: number, userId: string, memberships: 
 }
 
 async function handleDefaultTenantSelection(chatId: number, text: string): Promise<boolean> {
-  const pendingState = pendingStates.get(chatId);
+  const pendingState = await getPendingState(chatId);
   if (!pendingState || pendingState.kind !== "awaiting_default_tenant") {
     return false;
   }
@@ -209,13 +223,13 @@ async function handleDefaultTenantSelection(chatId: number, text: string): Promi
   }
 
   await backendClient.setDefaultTenant(pendingState.userId, selectedTenantId);
-  pendingStates.delete(chatId);
+  await clearPendingState(chatId);
   await sendMessage(chatId, `Default tenant set to ${selectedTenantId}. You can now use bot commands.`);
   return true;
 }
 
 async function handleClaimFlow(chatId: number, text: string): Promise<boolean> {
-  const pendingState = pendingStates.get(chatId);
+  const pendingState = await getPendingState(chatId);
   if (!pendingState) {
     return false;
   }
@@ -225,12 +239,12 @@ async function handleClaimFlow(chatId: number, text: string): Promise<boolean> {
     try {
       const sites = await backendClient.getSitesForTenant(pendingState.tenantId);
       if (sites.length === 0) {
-        pendingStates.delete(chatId);
+        await clearPendingState(chatId);
         await sendMessage(chatId, "No active site is available in your default tenant. Please contact your tenant admin.");
         return true;
       }
 
-      pendingStates.set(chatId, {
+      await setPendingState(chatId, {
         kind: "awaiting_claim_site",
         userId: pendingState.userId,
         tenantId: pendingState.tenantId,
@@ -248,7 +262,7 @@ async function handleClaimFlow(chatId: number, text: string): Promise<boolean> {
       );
       return true;
     } catch {
-      pendingStates.delete(chatId);
+      await clearPendingState(chatId);
       await sendMessage(chatId, "Could not continue the claim flow right now. Please try /add_device again.");
       return true;
     }
@@ -270,7 +284,7 @@ async function handleClaimFlow(chatId: number, text: string): Promise<boolean> {
       return true;
     }
 
-    pendingStates.set(chatId, {
+    await setPendingState(chatId, {
       kind: "awaiting_claim_name",
       userId: pendingState.userId,
       tenantId: pendingState.tenantId,
@@ -288,7 +302,7 @@ async function handleClaimFlow(chatId: number, text: string): Promise<boolean> {
       return true;
     }
 
-    pendingStates.set(chatId, {
+    await setPendingState(chatId, {
       kind: "confirming_claim",
       userId: pendingState.userId,
       tenantId: pendingState.tenantId,
@@ -312,7 +326,7 @@ async function handleClaimFlow(chatId: number, text: string): Promise<boolean> {
   if (pendingState.kind === "confirming_claim") {
     const answer = text.trim().toUpperCase();
     if (answer === "CANCEL") {
-      pendingStates.delete(chatId);
+      await clearPendingState(chatId);
       await sendMessage(chatId, "Claim cancelled.");
       return true;
     }
@@ -329,14 +343,14 @@ async function handleClaimFlow(chatId: number, text: string): Promise<boolean> {
         ownerUserId: pendingState.userId,
         displayName: pendingState.displayName,
       });
-      pendingStates.delete(chatId);
+      await clearPendingState(chatId);
       await sendMessage(
         chatId,
         `Device claimed successfully: ${device?.displayName ?? pendingState.displayName} (${pendingState.serialNumber}) is now active in site ${pendingState.siteId}.`,
       );
       return true;
     } catch (error) {
-      pendingStates.delete(chatId);
+      await clearPendingState(chatId);
       await sendMessage(chatId, error instanceof Error ? error.message : "Failed to claim device.");
       return true;
     }
@@ -346,14 +360,14 @@ async function handleClaimFlow(chatId: number, text: string): Promise<boolean> {
 }
 
 async function handleDeviceActionConfirmation(chatId: number, text: string): Promise<boolean> {
-  const pendingState = pendingStates.get(chatId);
+  const pendingState = await getPendingState(chatId);
   if (!pendingState || pendingState.kind !== "confirming_device_action") {
     return false;
   }
 
   const answer = text.trim().toUpperCase();
   if (answer === "CANCEL") {
-    pendingStates.delete(chatId);
+    await clearPendingState(chatId);
     await sendMessage(chatId, `${getActionLabel(pendingState.action)} cancelled.`);
     return true;
   }
@@ -368,10 +382,10 @@ async function handleDeviceActionConfirmation(chatId: number, text: string): Pro
       actorUserId: pendingState.userId,
       reason: pendingState.reason,
     });
-    pendingStates.delete(chatId);
+    await clearPendingState(chatId);
     await sendMessage(chatId, `Device ${getActionLabel(pendingState.action)} accepted for ${pendingState.identifier}.`);
   } catch (error) {
-    pendingStates.delete(chatId);
+    await clearPendingState(chatId);
     await sendMessage(chatId, error instanceof Error ? error.message : `Failed to ${getActionLabel(pendingState.action)} device.`);
   }
 
@@ -379,14 +393,14 @@ async function handleDeviceActionConfirmation(chatId: number, text: string): Pro
 }
 
 async function handleOtaConfirmation(chatId: number, text: string): Promise<boolean> {
-  const pendingState = pendingStates.get(chatId);
+  const pendingState = await getPendingState(chatId);
   if (!pendingState || pendingState.kind !== "confirming_ota") {
     return false;
   }
 
   const answer = text.trim().toUpperCase();
   if (answer === "CANCEL") {
-    pendingStates.delete(chatId);
+    await clearPendingState(chatId);
     await sendMessage(chatId, "OTA update cancelled.");
     return true;
   }
@@ -400,10 +414,10 @@ async function handleOtaConfirmation(chatId: number, text: string): Promise<bool
       version: pendingState.version,
       actorUserId: pendingState.userId,
     });
-    pendingStates.delete(chatId);
+    await clearPendingState(chatId);
     await sendMessage(chatId, `OTA job accepted: ${job?.jobId ?? "unknown"} targeting ${pendingState.version}.`);
   } catch (error) {
-    pendingStates.delete(chatId);
+    await clearPendingState(chatId);
     await sendMessage(chatId, error instanceof Error ? error.message : "Failed to start OTA update.");
   }
 
@@ -440,7 +454,7 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
     }
 
     case "/set_default_tenant": {
-      pendingStates.set(chatId, {
+      await setPendingState(chatId, {
         kind: "awaiting_default_tenant",
         userId,
         memberships: refreshedMemberships,
@@ -455,7 +469,7 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
         return;
       }
 
-      pendingStates.set(chatId, {
+      await setPendingState(chatId, {
         kind: "awaiting_claim_serial",
         userId,
         tenantId: user.defaultTenantId,
@@ -604,7 +618,7 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
 
         const device = await backendClient.getDeviceHealth(identifier);
         const reason = args.slice(1).join(" ").trim() || undefined;
-        pendingStates.set(chatId, {
+        await setPendingState(chatId, {
           kind: "confirming_device_action",
           userId,
           identifier,
@@ -649,7 +663,7 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
 
         const device = await backendClient.getDeviceHealth(identifier);
         const policy = await backendClient.getFirmwarePolicy(identifier);
-        pendingStates.set(chatId, {
+        await setPendingState(chatId, {
           kind: "confirming_ota",
           userId,
           identifier,

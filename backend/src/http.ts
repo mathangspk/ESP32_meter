@@ -288,6 +288,32 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
     res.json(notifications);
   });
 
+  app.get("/internal/bot-sessions/:chatId", async (req, res) => {
+    const session = await mongoService.getBotSession(req.params.chatId);
+    if (!session) {
+      res.status(404).json({ error: "Bot session not found" });
+      return;
+    }
+
+    res.json(session);
+  });
+
+  app.put("/internal/bot-sessions/:chatId", async (req, res) => {
+    const body = req.body as { state?: Record<string, unknown> };
+    if (!body.state || typeof body.state !== "object") {
+      res.status(400).json({ error: "state object is required" });
+      return;
+    }
+
+    const session = await mongoService.upsertBotSession(req.params.chatId, body.state);
+    res.json(session);
+  });
+
+  app.delete("/internal/bot-sessions/:chatId", async (req, res) => {
+    await mongoService.deleteBotSession(req.params.chatId);
+    res.status(204).end();
+  });
+
   app.post("/internal/notifications/:notificationId/processing", async (req, res) => {
     await mongoService.markNotificationProcessing(new ObjectId(req.params.notificationId));
     res.status(204).end();

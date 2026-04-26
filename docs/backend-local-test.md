@@ -48,6 +48,7 @@ With a real Telegram bot token configured, the `assistant-bot` service will:
 1. poll Telegram for commands and natural-language questions
 2. require a default tenant selection during `/start` if the user belongs to multiple tenants
 3. consume the Mongo-backed `notification_queue` and send outbound Telegram messages
+4. persist pending onboarding and confirmation state in backend `bot_sessions`
 
 Useful starter commands:
 
