@@ -5,6 +5,7 @@ import {
   FirmwareReleaseRequest,
   FirmwareReleaseSeverity,
   FirmwareSupportStatus,
+  DeviceAction,
   OtaStatus,
   OtaStatusPayload,
   TelemetryPayload,
@@ -132,6 +133,22 @@ export type AuditEventRecord = {
   deviceId?: string;
   payload?: Document;
   createdAt: Date;
+};
+
+export type DeviceCommandStatus = "queued" | "published" | "failed";
+
+export type DeviceCommandRecord = {
+  commandId: string;
+  action: DeviceAction;
+  deviceId: string;
+  serialNumber: string;
+  commandTopic: string;
+  status: DeviceCommandStatus;
+  actorUserId: string;
+  reason?: string;
+  errorMessage?: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type DeviceStateRecord = {
@@ -283,6 +300,7 @@ export class MongoService {
   private sites!: Collection<SiteRecord>;
   private deviceAssignments!: Collection<DeviceAssignmentRecord>;
   private auditEvents!: Collection<AuditEventRecord>;
+  private deviceCommands!: Collection<DeviceCommandRecord>;
   private alertEvents!: Collection<AlertEventRecord>;
   private otaJobs!: Collection<OtaJobRecord>;
   private otaStatusEvents!: Collection<OtaStatusEventRecord>;
@@ -302,6 +320,7 @@ export class MongoService {
     this.sites = this.db.collection<SiteRecord>("sites");
     this.deviceAssignments = this.db.collection<DeviceAssignmentRecord>("device_assignments");
     this.auditEvents = this.db.collection<AuditEventRecord>("audit_events");
+    this.deviceCommands = this.db.collection<DeviceCommandRecord>("device_commands");
     this.alertEvents = this.db.collection<AlertEventRecord>("alert_events");
     this.otaJobs = this.db.collection<OtaJobRecord>("ota_jobs");
     this.otaStatusEvents = this.db.collection<OtaStatusEventRecord>("ota_status_events");
@@ -918,6 +937,114 @@ export class MongoService {
     return this.devices.findOne({ serialNumber: input.serialNumber });
   }
 
+  async unclaimDevice(input: { identifier: string; actorUserId: string; reason?: string }): Promise<DeviceRecord | null> {
+    const now = new Date();
+    const existingDevice = await this.devices.findOne({ $or: [{ serialNumber: input.identifier }, { deviceId: input.identifier }] });
+    if (!existingDevice) {
+      throw new Error("Device not found");
+    }
+    if (existingDevice.claimStatus === "unclaimed") {
+      throw new Error("Device is already unclaimed");
+    }
+
+    await this.devices.updateOne(
+      { serialNumber: existingDevice.serialNumber },
+      {
+        $set: {
+          claimStatus: "unclaimed",
+          lifecycleStatus: "unclaimed",
+          unclaimedAt: now,
+          updatedAt: now,
+        },
+        $unset: {
+          tenantId: "",
+          siteId: "",
+          ownerUserId: "",
+          displayName: "",
+        },
+      },
+    );
+
+    await this.deviceAssignments.updateMany(
+      { serialNumber: existingDevice.serialNumber, unassignedAt: { $exists: false } },
+      { $set: { unassignedAt: now } },
+    );
+
+    await this.auditEvents.insertOne({
+      eventType: "device.unclaimed",
+      actorUserId: input.actorUserId,
+      tenantId: existingDevice.tenantId,
+      deviceSerialNumber: existingDevice.serialNumber,
+      deviceId: existingDevice.deviceId,
+      payload: {
+        reason: input.reason,
+        previousSiteId: existingDevice.siteId,
+        previousOwnerUserId: existingDevice.ownerUserId,
+      },
+      createdAt: now,
+    });
+
+    return this.devices.findOne({ serialNumber: existingDevice.serialNumber });
+  }
+
+  async createDeviceCommand(input: {
+    commandId: string;
+    action: DeviceAction;
+    identifier: string;
+    commandTopic: string;
+    actorUserId: string;
+    reason?: string;
+  }): Promise<DeviceCommandRecord> {
+    const now = new Date();
+    const device = await this.devices.findOne({ $or: [{ serialNumber: input.identifier }, { deviceId: input.identifier }] });
+    if (!device) {
+      throw new Error("Device not found");
+    }
+
+    const command: DeviceCommandRecord = {
+      commandId: input.commandId,
+      action: input.action,
+      deviceId: device.deviceId,
+      serialNumber: device.serialNumber,
+      commandTopic: input.commandTopic,
+      status: "queued",
+      actorUserId: input.actorUserId,
+      reason: input.reason,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await this.deviceCommands.insertOne(command);
+    await this.auditEvents.insertOne({
+      eventType: `device.command.${input.action}.queued`,
+      actorUserId: input.actorUserId,
+      tenantId: device.tenantId,
+      deviceSerialNumber: device.serialNumber,
+      deviceId: device.deviceId,
+      payload: { commandId: input.commandId, reason: input.reason, commandTopic: input.commandTopic },
+      createdAt: now,
+    });
+
+    return command;
+  }
+
+  async markDeviceCommandPublished(commandId: string): Promise<void> {
+    const now = new Date();
+    await this.deviceCommands.updateOne({ commandId }, { $set: { status: "published", updatedAt: now } });
+  }
+
+  async markDeviceCommandFailed(commandId: string, errorMessage: string): Promise<void> {
+    const now = new Date();
+    await this.deviceCommands.updateOne(
+      { commandId },
+      { $set: { status: "failed", errorMessage, updatedAt: now } },
+    );
+  }
+
+  async getDeviceCommands(limit = 50): Promise<DeviceCommandRecord[]> {
+    return this.deviceCommands.find({}, { sort: { createdAt: -1 }, limit }).toArray();
+  }
+
   async getDevicesForTenant(tenantId: string, limit = 50): Promise<DeviceListRecord[]> {
     return this.devices
       .aggregate<DeviceListRecord>([
@@ -1327,6 +1454,8 @@ export class MongoService {
     await this.tenantMemberships.createIndex({ userId: 1, tenantId: 1 }, { unique: true });
     await this.channelIdentities.createIndex({ provider: 1, externalId: 1 }, { unique: true });
     await this.deviceAssignments.createIndex({ serialNumber: 1, assignedAt: -1 });
+    await this.deviceCommands.createIndex({ commandId: 1 }, { unique: true });
+    await this.deviceCommands.createIndex({ deviceId: 1, createdAt: -1 });
     await this.auditEvents.createIndex({ createdAt: -1 });
     await this.otaJobs.createIndex({ jobId: 1 }, { unique: true });
     await this.otaJobs.createIndex({ deviceId: 1, createdAt: -1 });

@@ -63,6 +63,9 @@ Useful starter commands:
 /sites
 /firmware_policy
 /firmware_policy SN005
+/remove_device SN005 maintenance
+/reboot_device SN005 maintenance
+/factory_reset SN005 maintenance
 ```
 
 Claim flow starter command:
@@ -94,6 +97,24 @@ Expected current-device result after local bootstrap:
 1. `SN005` reports firmware `1.0.0`.
 2. `1.0.0` is `supported`.
 3. update availability is `false` until a newer compatible release is added.
+
+## Device Actions
+
+The backend exposes a channel-agnostic action API:
+
+```bash
+curl -X POST http://127.0.0.1:3000/devices/SN005/actions \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"reboot","actorUserId":"platform-admin","reason":"maintenance"}'
+```
+
+Supported actions:
+
+1. `remove`: unclaims the device immediately and keeps history.
+2. `reboot`: publishes an MQTT command to `meter/<deviceId>/control`.
+3. `factory_reset`: publishes an MQTT command to wipe app config and Wi-Fi settings, then reboot.
+
+Do not run `factory_reset` on the live device unless you are ready to re-onboard Wi-Fi and app config.
 
 ## OTA Dry-Run
 

@@ -127,6 +127,8 @@ const firmwarePolicySchema = z
   })
   .passthrough();
 
+const deviceActionResultSchema = z.unknown();
+
 async function request<T>(path: string, init: RequestInit, schema: z.ZodType<T>): Promise<T> {
   const response = await fetch(`${config.BACKEND_BASE_URL}${path}`, init);
   if (!response.ok) {
@@ -230,6 +232,17 @@ export const backendClient = {
 
   getFirmwareReleases: (limit = 20) =>
     request(`/admin/firmware/releases?limit=${limit}`, { method: "GET" }, z.array(firmwareReleaseSchema)),
+
+  performDeviceAction: (identifier: string, input: { action: "remove" | "reboot" | "factory_reset"; actorUserId: string; reason?: string }) =>
+    request(
+      `/devices/${encodeURIComponent(identifier)}/actions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      },
+      deviceActionResultSchema,
+    ),
 
   getPendingNotifications: (limit = 20) =>
     request(`/internal/notifications/pending?limit=${limit}`, { method: "GET" }, z.array(notificationSchema)),

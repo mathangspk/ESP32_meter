@@ -6,7 +6,7 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 
 - **Phase 1 completed**: backend domain foundation and fleet visibility
 - **Phase 2 partially completed**: `assistant-bot` service exists, Telegram polling baseline exists, notification queue exists, default-tenant flow exists, basic claim flow exists
-- **Phase 3 partially completed**: firmware release catalog and update policy engine exist; remove/unclaim flow, reboot/factory reset flow, persisted onboarding sessions, bot-driven OTA confirmation, full Groq-enabled Q&A in real operation are still pending
+- **Phase 3 mostly completed**: firmware release catalog, update policy engine, remove/unclaim flow, reboot/factory reset flow, claim confirmation, and firmware identity metadata exist; persisted onboarding sessions, bot-driven OTA confirmation, and full Groq-enabled Q&A in real operation are still pending
 
 ## Implemented So Far
 
@@ -16,6 +16,9 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 - MQTT publish path verified with the real ESP32
 - OTA command and OTA status path verified with a safe dry-run
 - MQTT buffer increased so structured OTA payloads can be received reliably
+- Remote control command handling implemented on `meter/<deviceId>/control`
+- Firmware supports backend `reboot` and `factory_reset` commands
+- Telemetry now includes `mac_address`, `chip_family`, `chip_model`, and `board_type`
 
 ### Backend
 
@@ -60,6 +63,12 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
   - `POST /admin/firmware/releases`
   - `GET /devices/:deviceId/firmware-policy`
   - `GET /admin/firmware/policy`
+- Device management actions implemented:
+  - `POST /devices/:deviceId/actions`
+  - `GET /admin/device-commands`
+  - `remove` unclaims immediately and preserves history
+  - `reboot` publishes MQTT control command
+  - `factory_reset` publishes MQTT control command
 
 ### Assistant Bot
 
@@ -81,6 +90,10 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
   - `/tenants`
   - `/sites`
   - `/firmware_policy [serial_or_device_id]`
+  - `/remove_device <serial_or_device_id> [reason]`
+  - `/reboot_device <serial_or_device_id> [reason]`
+  - `/factory_reset <serial_or_device_id> [reason]`
+- Second-confirmation flows implemented for claim, remove, reboot, and factory reset
 - Basic claim flow implemented:
   - serial number
   - site selection
@@ -96,6 +109,8 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 - Backend build and typecheck pass
 - Assistant-bot build and typecheck pass
 - Firmware policy runtime endpoints pass for `SN005`
+- Firmware upload passed with remote control and telemetry metadata changes
+- `SN005` remote reboot command was published and the device recovered with new telemetry
 - The live `SN005` device is currently:
   - `claimStatus=claimed`
   - `lifecycleStatus=active`
@@ -107,12 +122,7 @@ The project is currently in **Phase 3** of the long-term platform roadmap.
 ## Important Current Constraints
 
 - `assistant-bot` onboarding state is still in memory; it is not yet persisted in backend onboarding sessions
-- Firmware does not yet publish full identity metadata fields:
-  - `mac_address`
-  - `chip_family`
-  - `chip_model`
-  - `board_type`
-- Remove/unclaim, reboot, and factory reset command workflows are not implemented yet in the bot/backend command path
+- Onboarding/confirmation state is still in-memory inside `assistant-bot`
 - OTA job creation is not yet automatically gated by firmware policy
 - Groq integration exists in code path but has not been verified with real credentials in runtime
 - Local Telegram real delivery still depends on replacing placeholder credentials
@@ -130,7 +140,7 @@ Read these first in a new session:
 
 Implement the next major milestone in this order:
 
-1. remove/unclaim flow
-2. reboot/factory reset command flow
-3. persisted onboarding sessions
-4. OTA confirm and policy-gated update flow
+1. persisted onboarding sessions
+2. OTA confirm and policy-gated update flow
+3. real Telegram credential verification
+4. OTA success path with a hosted artifact

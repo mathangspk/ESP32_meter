@@ -3,8 +3,10 @@ import { ObjectId } from "mongodb";
 import { ZodError } from "zod";
 import { logger } from "./logger";
 import { mongoService } from "./mongodb";
+import { performDeviceAction } from "./device-actions";
 import { createOtaJob } from "./ota";
 import { HealthSnapshot } from "./types";
+import { deviceActionRequestSchema } from "./types";
 import { firmwareReleaseRequestSchema } from "./types";
 import { otaCommandRequestSchema } from "./types";
 
@@ -106,6 +108,22 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
     }
   });
 
+  app.post("/devices/:deviceId/actions", async (req, res) => {
+    try {
+      const input = deviceActionRequestSchema.parse(req.body);
+      const result = await performDeviceAction(req.params.deviceId, input);
+      res.status(input.action === "remove" ? 200 : 202).json(result);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({ error: "Invalid device action", details: error.flatten() });
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : "Failed to perform device action";
+      res.status(message === "Device not found" ? 404 : 400).json({ error: message });
+    }
+  });
+
   app.get("/admin/fleet/summary", async (_req, res) => {
     const summary = await mongoService.getFleetSummary();
     res.json(summary);
@@ -178,6 +196,13 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
     const limit = Number(rawLimit ?? 50);
     const policy = await mongoService.evaluateFirmwarePolicyForFleet(Number.isFinite(limit) && limit > 0 ? limit : 50);
     res.json(policy);
+  });
+
+  app.get("/admin/device-commands", async (req, res) => {
+    const rawLimit = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
+    const limit = Number(rawLimit ?? 50);
+    const commands = await mongoService.getDeviceCommands(Number.isFinite(limit) && limit > 0 ? limit : 50);
+    res.json(commands);
   });
 
   app.post("/internal/telegram/identify", async (req, res) => {

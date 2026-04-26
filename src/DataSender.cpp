@@ -1,10 +1,12 @@
 #include "DataSender.h"
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <WiFiManager.h>
 #include "ConfigManager.h"
 #include "OTAUpdate.h"
 
 #define FIRMWARE_VERSION "1.0.0"
+#define BOARD_TYPE "esp32doit-devkit-v1"
 
 extern ConfigManager configManager;
 
@@ -73,6 +75,8 @@ void DataSender::reconnect()
         // Subscribe to control topics
         String controlTopic = "meter/" + String(deviceId) + "/control";
         client.subscribe(controlTopic.c_str());
+        Serial.print("Subscribed to: ");
+        Serial.println(controlTopic);
 
         // Thêm subscribe cho topic test
         String testTopic = "firmwareUpdateOTA/device/" + String(serialNumber);
@@ -104,7 +108,7 @@ void DataSender::callback(char *topic, byte *payload, unsigned int length)
     Serial.println(message);
 
     // Parse JSON
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<512> doc;
     DeserializationError error = deserializeJson(doc, message);
     if (error)
     {
@@ -117,6 +121,36 @@ void DataSender::callback(char *topic, byte *payload, unsigned int length)
     const char *job_id = doc["job_id"] | "";
     const char *target_version = doc["version"] | "";
     String expectedTopic = "firmwareUpdateOTA/device/" + String(serialNumber);
+    String controlTopic = "meter/" + String(deviceId) + "/control";
+
+    if (String(topic) == controlTopic)
+    {
+        const char *action = doc["action"] | "";
+        const char *command_id = doc["command_id"] | "";
+        Serial.printf("Received control command: %s (%s)\n", action, command_id);
+
+        if (String(action) == "reboot")
+        {
+            Serial.println("Reboot command accepted");
+            delay(500);
+            ESP.restart();
+            return;
+        }
+
+        if (String(action) == "factory_reset")
+        {
+            Serial.println("Factory reset command accepted");
+            WiFiManager wifiManager;
+            wifiManager.resetSettings();
+            configManager.resetToDefaults();
+            delay(500);
+            ESP.restart();
+            return;
+        }
+
+        Serial.println("Unknown control command ignored");
+        return;
+    }
 
     if (String(topic) == expectedTopic)
     {
@@ -281,6 +315,10 @@ String DataSender::createPayload(String serial_number, float voltage, float curr
     doc["ip_address"] = IPAddress;
     doc["timestamp"] = getTimestamp();
     doc["firmware_version"] = FIRMWARE_VERSION;
+    doc["mac_address"] = WiFi.macAddress();
+    doc["chip_family"] = "ESP32";
+    doc["chip_model"] = ESP.getChipModel();
+    doc["board_type"] = BOARD_TYPE;
     String output;
     serializeJson(doc, output);
     return output;

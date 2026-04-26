@@ -39,6 +39,17 @@ export const firmwareReleaseRequestSchema = z.object({
 
 export type FirmwareReleaseRequest = z.infer<typeof firmwareReleaseRequestSchema>;
 
+export const deviceActionSchema = z.enum(["remove", "reboot", "factory_reset"]);
+export type DeviceAction = z.infer<typeof deviceActionSchema>;
+
+export const deviceActionRequestSchema = z.object({
+  action: deviceActionSchema,
+  actorUserId: z.string().min(1),
+  reason: z.string().min(1).optional(),
+});
+
+export type DeviceActionRequest = z.infer<typeof deviceActionRequestSchema>;
+
 export const otaCommandRequestSchema = z.object({
   device_id: z.string().min(1),
   serial_number: z.string().min(1),

@@ -30,6 +30,21 @@ type PendingState =
       serialNumber: string;
       siteId: string;
     }
+  | {
+      kind: "confirming_claim";
+      userId: string;
+      tenantId: string;
+      serialNumber: string;
+      siteId: string;
+      displayName: string;
+    }
+  | {
+      kind: "confirming_device_action";
+      userId: string;
+      identifier: string;
+      action: "remove" | "reboot" | "factory_reset";
+      reason?: string;
+    }
   | undefined;
 
 const pendingStates = new Map<number, PendingState>();
@@ -126,6 +141,26 @@ function formatFleetFirmwarePolicy(policies: Awaited<ReturnType<typeof backendCl
         `- ${policy.serialNumber}: ${policy.currentVersion ?? "unknown"} | ${policy.supportStatus} | ${policy.severity} | latest ${policy.latestVersion ?? "unknown"}`,
     ),
   ].join("\n");
+}
+
+function getActionLabel(action: "remove" | "reboot" | "factory_reset"): string {
+  if (action === "factory_reset") {
+    return "factory reset";
+  }
+  return action;
+}
+
+async function canManageDevice(identifier: string, userDefaultTenantId: string | undefined, memberships: Membership[]): Promise<boolean> {
+  if (isPlatformAdmin(memberships)) {
+    return true;
+  }
+
+  if (!userDefaultTenantId) {
+    return false;
+  }
+
+  const device = await backendClient.getDeviceHealth(identifier);
+  return device.tenantId === userDefaultTenantId;
 }
 
 async function ensureDefaultTenant(chatId: number, userId: string, memberships: Membership[]): Promise<boolean> {
@@ -247,18 +282,51 @@ async function handleClaimFlow(chatId: number, text: string): Promise<boolean> {
       return true;
     }
 
+    pendingStates.set(chatId, {
+      kind: "confirming_claim",
+      userId: pendingState.userId,
+      tenantId: pendingState.tenantId,
+      serialNumber: pendingState.serialNumber,
+      siteId: pendingState.siteId,
+      displayName,
+    });
+    await sendMessage(
+      chatId,
+      [
+        "Confirm device claim:",
+        `Serial: ${pendingState.serialNumber}`,
+        `Site: ${pendingState.siteId}`,
+        `Name: ${displayName}`,
+        "Send CONFIRM to claim this device, or CANCEL to stop.",
+      ].join("\n"),
+    );
+    return true;
+  }
+
+  if (pendingState.kind === "confirming_claim") {
+    const answer = text.trim().toUpperCase();
+    if (answer === "CANCEL") {
+      pendingStates.delete(chatId);
+      await sendMessage(chatId, "Claim cancelled.");
+      return true;
+    }
+    if (answer !== "CONFIRM") {
+      await sendMessage(chatId, "Please send CONFIRM to claim this device, or CANCEL to stop.");
+      return true;
+    }
+
     try {
       const device = await backendClient.claimDevice({
         serialNumber: pendingState.serialNumber,
         tenantId: pendingState.tenantId,
         siteId: pendingState.siteId,
         ownerUserId: pendingState.userId,
-        displayName,
+        displayName: pendingState.displayName,
       });
       pendingStates.delete(chatId);
       await sendMessage(
         chatId,
-        `Device claimed successfully: ${device?.displayName ?? displayName} (${pendingState.serialNumber}) is now active in site ${pendingState.siteId}.`,
+        `Device claimed successfully: ${device?.displayName ?? pendingState.displayName} (${pendingState.serialNumber}) is now active in site ${pendingState.siteId}.`,
       );
       return true;
     } catch (error) {
@@ -269,6 +337,39 @@ async function handleClaimFlow(chatId: number, text: string): Promise<boolean> {
   }
 
   return false;
+}
+
+async function handleDeviceActionConfirmation(chatId: number, text: string): Promise<boolean> {
+  const pendingState = pendingStates.get(chatId);
+  if (!pendingState || pendingState.kind !== "confirming_device_action") {
+    return false;
+  }
+
+  const answer = text.trim().toUpperCase();
+  if (answer === "CANCEL") {
+    pendingStates.delete(chatId);
+    await sendMessage(chatId, `${getActionLabel(pendingState.action)} cancelled.`);
+    return true;
+  }
+  if (answer !== "CONFIRM") {
+    await sendMessage(chatId, `Please send CONFIRM to ${getActionLabel(pendingState.action)} this device, or CANCEL to stop.`);
+    return true;
+  }
+
+  try {
+    await backendClient.performDeviceAction(pendingState.identifier, {
+      action: pendingState.action,
+      actorUserId: pendingState.userId,
+      reason: pendingState.reason,
+    });
+    pendingStates.delete(chatId);
+    await sendMessage(chatId, `Device ${getActionLabel(pendingState.action)} accepted for ${pendingState.identifier}.`);
+  } catch (error) {
+    pendingStates.delete(chatId);
+    await sendMessage(chatId, error instanceof Error ? error.message : `Failed to ${getActionLabel(pendingState.action)} device.`);
+  }
+
+  return true;
 }
 
 async function handleCommand(chatId: number, text: string, userId: string, memberships: Membership[]) {
@@ -446,6 +547,53 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
       return;
     }
 
+    case "/remove_device":
+    case "/reboot_device":
+    case "/factory_reset": {
+      const identifier = args[0]?.trim();
+      if (!identifier) {
+        await sendMessage(chatId, `Usage: ${command} <serial_number_or_device_id> [reason]`);
+        return;
+      }
+
+      const action = command === "/remove_device" ? "remove" : command === "/reboot_device" ? "reboot" : "factory_reset";
+      try {
+        const allowed = await canManageDevice(identifier, user.defaultTenantId, refreshedMemberships);
+        if (!allowed) {
+          await sendMessage(chatId, "You do not have permission to manage this device.");
+          return;
+        }
+
+        const device = await backendClient.getDeviceHealth(identifier);
+        const reason = args.slice(1).join(" ").trim() || undefined;
+        pendingStates.set(chatId, {
+          kind: "confirming_device_action",
+          userId,
+          identifier,
+          action,
+          reason,
+        });
+
+        await sendMessage(
+          chatId,
+          [
+            `Confirm ${getActionLabel(action)}:`,
+            `Device: ${device.displayName ?? device.serialNumber}`,
+            `Serial: ${device.serialNumber}`,
+            `Device ID: ${device.deviceId}`,
+            action === "remove" ? "This will unclaim the device immediately and keep history." : "This will publish a remote command to the device over MQTT.",
+            action === "factory_reset" ? "Factory reset will wipe app config and Wi-Fi settings, then reboot into AP/bootstrap mode." : undefined,
+            "Send CONFIRM to continue, or CANCEL to stop.",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        );
+      } catch {
+        await sendMessage(chatId, "Device not found.");
+      }
+      return;
+    }
+
     default:
       await handleNaturalLanguage(chatId, text, user, refreshedMemberships);
   }
@@ -483,6 +631,10 @@ async function processMessage(update: TelegramUpdate): Promise<void> {
   }
 
   if (await handleClaimFlow(chatId, text)) {
+    return;
+  }
+
+  if (await handleDeviceActionConfirmation(chatId, text)) {
     return;
   }
 

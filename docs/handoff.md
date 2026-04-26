@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Finish the next management workflows on top of the working `assistant-bot`: remove/unclaim, factory reset, reboot confirmation, and persisted onboarding sessions.
+Finish the remaining management workflows on top of the working `assistant-bot`: persisted onboarding sessions and OTA confirmation/policy gating.
 
 ## Confirmed State
 
@@ -96,16 +96,38 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
   - `GET /admin/firmware/releases`
   - `POST /admin/firmware/releases`
 - `assistant-bot` now has `/firmware_policy [serial_or_device_id]` for per-device policy and platform-admin fleet policy views
+- Firmware now handles backend-published control commands on `meter/<deviceId>/control`:
+  - `reboot`
+  - `factory_reset`
+- Firmware telemetry now publishes hardware identity metadata:
+  - `mac_address`
+  - `chip_family`
+  - `chip_model`
+  - `board_type`
+- Backend now has device management action APIs:
+  - `POST /devices/:deviceId/actions`
+  - `GET /admin/device-commands`
+- Backend `remove` action now unclaims a device immediately, closes active assignment records, and keeps audit history
+- Backend `reboot` and `factory_reset` actions now create command audit records and publish MQTT control commands
+- `assistant-bot` now has second-confirmation flows for:
+  - claim
+  - remove/unclaim
+  - reboot
+  - factory reset
+- New bot commands:
+  - `/remove_device <serial_or_device_id> [reason]`
+  - `/reboot_device <serial_or_device_id> [reason]`
+  - `/factory_reset <serial_or_device_id> [reason]`
 - Compose local and production stacks now include the `assistant-bot` service
 - GitHub workflows now build and publish `assistant-bot` images as well as the backend image
 
 ## Next Recommended Steps
 
-1. Add remove/unclaim, reboot, and factory reset command flows with second confirmation in the bot.
-2. Extend claim/onboarding to persist full onboarding session state in the backend instead of temporary in-memory bot state.
-3. Update firmware to publish `mac_address`, `chip_family`, `chip_model`, and `board_type` in telemetry.
-4. Replace placeholder Telegram credentials with real values and verify end-to-end bot command and queued alert delivery.
-5. Host a real firmware artifact and test the OTA success path.
+1. Extend claim/onboarding to persist full onboarding session state in the backend instead of temporary in-memory bot state.
+2. Add OTA confirmation flow in the bot and gate OTA job creation against the firmware release catalog.
+3. Replace placeholder Telegram credentials with real values and verify end-to-end bot command and queued alert delivery.
+4. Host a real firmware artifact and test the OTA success path.
+5. Run a longer stability check after real bot credentials are configured.
 
 ## Known Constraints
 
@@ -119,8 +141,7 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - The current OTA implementation stores `sha256` metadata but does not enforce checksum validation in firmware yet
 - `assistant-bot` service does not exist yet, so queued notifications are currently stored but not delivered
 - Bot onboarding state is still in memory inside `assistant-bot` and will be lost on restart until backend onboarding sessions are implemented
-- Firmware still needs to be updated to publish the new hardware identity metadata fields
-- Sensitive management actions such as remove/reset/reboot/OTA do not yet have their final confirm-twice bot workflow
+- OTA does not yet have its final confirm-twice bot workflow
 - Firmware policy is implemented, but OTA job creation is not yet automatically gated by the policy engine
 
 ## Most Relevant Commands
@@ -144,6 +165,7 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Backend domain foundation and fleet visibility milestone: passed
 - Assistant-bot baseline milestone: passed
 - Firmware release policy milestone: passed
+- Sensitive action workflow milestone for claim/remove/reboot/factory-reset: passed
 - Evidence: device emitted a valid `PZEM OK` line with voltage and energy data
 - Evidence: `/healthz` returned `{"status":"ok","uptimeSeconds":7,"mqttConnected":true,"mongodbConnected":true}`
 - Evidence: MongoDB stored test telemetry and state for device `5`
@@ -161,6 +183,12 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Evidence: `GET /admin/firmware/releases` returns the bootstrapped `1.0.0` release with `supportStatus=supported` and `severity=optional`
 - Evidence: `GET /devices/SN005/firmware-policy` returns `supportStatus=supported`, `severity=optional`, and `updateAvailable=false`
 - Evidence: `GET /admin/firmware/policy` returns the same policy evaluation for fleet device `SN005`
+- Evidence: firmware upload passed after adding control command handling and identity metadata
+- Evidence: serial log after upload showed subscription to `meter/5/control` and telemetry payload containing `mac_address`, `chip_family`, `chip_model`, and `board_type`
+- Evidence: `GET /devices/SN005/health` stores `macAddress=EC:E3:34:7B:93:7C`, `chipFamily=ESP32`, `chipModel=ESP32-D0WD-V3`, and `boardType=esp32doit-devkit-v1`
+- Evidence: `POST /devices/SN005/actions` with `action=reboot` returned command `d909029f-bc56-4038-ba2a-5b56babd84e3` with `status=published`
+- Evidence: `GET /admin/device-commands` returned the published reboot command record
+- Evidence: after the reboot command, `SN005` published telemetry again and backend state returned to `isOffline=false`
 
 ## Suggested New Session Prompt
 
