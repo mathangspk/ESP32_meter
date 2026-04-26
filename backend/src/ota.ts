@@ -41,3 +41,29 @@ export async function createOtaJob(input: OtaCommandRequest) {
 
   return mongoService.getOtaJob(jobId);
 }
+
+export async function createOtaJobFromRelease(identifier: string, version: string) {
+  const device = await mongoService.getDeviceHealth(identifier);
+  if (!device) {
+    throw new Error("Device not found");
+  }
+
+  const release = await mongoService.getFirmwareReleaseForDevice(identifier, version);
+  if (!release) {
+    throw new Error("Firmware release is not compatible with this device or does not exist");
+  }
+  if (!release.url) {
+    throw new Error("Firmware release does not have a downloadable URL");
+  }
+  if (release.supportStatus === "unsupported") {
+    throw new Error("Cannot install an unsupported firmware release");
+  }
+
+  return createOtaJob({
+    device_id: device.deviceId,
+    serial_number: device.serialNumber,
+    version: release.version,
+    url: release.url,
+    sha256: release.sha256,
+  });
+}

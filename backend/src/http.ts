@@ -4,11 +4,12 @@ import { ZodError } from "zod";
 import { logger } from "./logger";
 import { mongoService } from "./mongodb";
 import { performDeviceAction } from "./device-actions";
-import { createOtaJob } from "./ota";
+import { createOtaJob, createOtaJobFromRelease } from "./ota";
 import { HealthSnapshot } from "./types";
 import { deviceActionRequestSchema } from "./types";
 import { firmwareReleaseRequestSchema } from "./types";
 import { otaCommandRequestSchema } from "./types";
+import { otaReleaseRequestSchema } from "./types";
 
 export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
   const app = express();
@@ -120,6 +121,22 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
       }
 
       const message = error instanceof Error ? error.message : "Failed to perform device action";
+      res.status(message === "Device not found" ? 404 : 400).json({ error: message });
+    }
+  });
+
+  app.post("/devices/:deviceId/ota", async (req, res) => {
+    try {
+      const input = otaReleaseRequestSchema.parse(req.body);
+      const job = await createOtaJobFromRelease(req.params.deviceId, input.version);
+      res.status(202).json(job);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({ error: "Invalid OTA release request", details: error.flatten() });
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : "Failed to create OTA job from release";
       res.status(message === "Device not found" ? 404 : 400).json({ error: message });
     }
   });

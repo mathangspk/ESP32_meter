@@ -1181,6 +1181,16 @@ export class MongoService {
     return this.evaluateFirmwarePolicy(device);
   }
 
+  async getFirmwareReleaseForDevice(identifier: string, version: string): Promise<FirmwareReleaseRecord | null> {
+    const device = await this.devices.findOne({ $or: [{ serialNumber: identifier }, { deviceId: identifier }] });
+    if (!device) {
+      throw new Error("Device not found");
+    }
+
+    const releases = await this.getCompatibleFirmwareReleases(device);
+    return releases.find((release) => release.version === version) ?? null;
+  }
+
   async evaluateFirmwarePolicyForFleet(limit = 50): Promise<FirmwarePolicyEvaluation[]> {
     const devices = await this.devices.find({}, { sort: { updatedAt: -1 }, limit }).toArray();
     return Promise.all(devices.map((device) => this.evaluateFirmwarePolicy(device)));

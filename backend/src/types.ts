@@ -60,6 +60,13 @@ export const otaCommandRequestSchema = z.object({
 
 export type OtaCommandRequest = z.infer<typeof otaCommandRequestSchema>;
 
+export const otaReleaseRequestSchema = z.object({
+  version: z.string().min(1),
+  actorUserId: z.string().min(1),
+});
+
+export type OtaReleaseRequest = z.infer<typeof otaReleaseRequestSchema>;
+
 export const otaCommandPayloadSchema = otaCommandRequestSchema.extend({
   job_id: z.string().min(1),
 });

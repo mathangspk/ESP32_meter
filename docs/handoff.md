@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Finish the remaining management workflows on top of the working `assistant-bot`: persisted onboarding sessions and OTA confirmation/policy gating.
+Finish the remaining management workflow on top of the working `assistant-bot`: persisted onboarding sessions.
 
 ## Confirmed State
 
@@ -118,16 +118,20 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
   - `/remove_device <serial_or_device_id> [reason]`
   - `/reboot_device <serial_or_device_id> [reason]`
   - `/factory_reset <serial_or_device_id> [reason]`
+- Backend now has a policy-gated OTA release endpoint:
+  - `POST /devices/:deviceId/ota`
+- The policy-gated OTA endpoint only creates an OTA job when the requested version exists in the compatible firmware release catalog, is not `unsupported`, and has a downloadable URL
+- `assistant-bot` now has second-confirmation OTA flow through:
+  - `/ota_update <serial_or_device_id> <firmware_version>`
 - Compose local and production stacks now include the `assistant-bot` service
 - GitHub workflows now build and publish `assistant-bot` images as well as the backend image
 
 ## Next Recommended Steps
 
 1. Extend claim/onboarding to persist full onboarding session state in the backend instead of temporary in-memory bot state.
-2. Add OTA confirmation flow in the bot and gate OTA job creation against the firmware release catalog.
-3. Replace placeholder Telegram credentials with real values and verify end-to-end bot command and queued alert delivery.
-4. Host a real firmware artifact and test the OTA success path.
-5. Run a longer stability check after real bot credentials are configured.
+2. Replace placeholder Telegram credentials with real values and verify end-to-end bot command and queued alert delivery.
+3. Host a real firmware artifact and test the OTA success path.
+4. Run a longer stability check after real bot credentials are configured.
 
 ## Known Constraints
 
@@ -141,8 +145,7 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - The current OTA implementation stores `sha256` metadata but does not enforce checksum validation in firmware yet
 - `assistant-bot` service does not exist yet, so queued notifications are currently stored but not delivered
 - Bot onboarding state is still in memory inside `assistant-bot` and will be lost on restart until backend onboarding sessions are implemented
-- OTA does not yet have its final confirm-twice bot workflow
-- Firmware policy is implemented, but OTA job creation is not yet automatically gated by the policy engine
+- The legacy direct `POST /ota/jobs` endpoint still accepts explicit URL payloads for engineering dry-runs; user-facing bot OTA uses the policy-gated release endpoint
 
 ## Most Relevant Commands
 
@@ -166,6 +169,7 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Assistant-bot baseline milestone: passed
 - Firmware release policy milestone: passed
 - Sensitive action workflow milestone for claim/remove/reboot/factory-reset: passed
+- Policy-gated bot OTA milestone: passed
 - Evidence: device emitted a valid `PZEM OK` line with voltage and energy data
 - Evidence: `/healthz` returned `{"status":"ok","uptimeSeconds":7,"mqttConnected":true,"mongodbConnected":true}`
 - Evidence: MongoDB stored test telemetry and state for device `5`
@@ -189,6 +193,8 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Evidence: `POST /devices/SN005/actions` with `action=reboot` returned command `d909029f-bc56-4038-ba2a-5b56babd84e3` with `status=published`
 - Evidence: `GET /admin/device-commands` returned the published reboot command record
 - Evidence: after the reboot command, `SN005` published telemetry again and backend state returned to `isOffline=false`
+- Evidence: `POST /devices/SN005/ota` with version `1.0.0` correctly returned `Firmware release does not have a downloadable URL`, so no OTA job was started without a catalog artifact URL
+- Evidence: `POST /devices/NO_SUCH_DEVICE/ota` correctly returned `Device not found`
 
 ## Suggested New Session Prompt
 

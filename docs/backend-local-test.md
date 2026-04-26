@@ -66,6 +66,7 @@ Useful starter commands:
 /remove_device SN005 maintenance
 /reboot_device SN005 maintenance
 /factory_reset SN005 maintenance
+/ota_update SN005 1.0.1
 ```
 
 Claim flow starter command:
@@ -136,3 +137,20 @@ Expected OTA dry-run behavior:
 1. The backend returns an OTA job with status `published`.
 2. The ESP32 emits OTA status events on `meter/<deviceId>/ota/status`.
 3. The final job state becomes `failed` with a message such as `OTA URL is not reachable`.
+
+## Policy-Gated OTA
+
+User-facing OTA should go through the release catalog instead of accepting arbitrary URLs:
+
+```bash
+curl -X POST http://127.0.0.1:3000/devices/SN005/ota \
+  -H 'Content-Type: application/json' \
+  -d '{"version":"1.0.1","actorUserId":"platform-admin"}'
+```
+
+Expected behavior:
+
+1. The requested version must exist in `firmware_releases`.
+2. The release must be compatible with the target device metadata.
+3. The release must have a downloadable `url`.
+4. The release must not be marked `unsupported`.

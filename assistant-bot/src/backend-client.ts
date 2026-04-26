@@ -129,6 +129,16 @@ const firmwarePolicySchema = z
 
 const deviceActionResultSchema = z.unknown();
 
+const otaJobSchema = z
+  .object({
+    jobId: z.string(),
+    deviceId: z.string(),
+    serialNumber: z.string(),
+    targetVersion: z.string(),
+    status: z.string(),
+  })
+  .passthrough();
+
 async function request<T>(path: string, init: RequestInit, schema: z.ZodType<T>): Promise<T> {
   const response = await fetch(`${config.BACKEND_BASE_URL}${path}`, init);
   if (!response.ok) {
@@ -242,6 +252,17 @@ export const backendClient = {
         body: JSON.stringify(input),
       },
       deviceActionResultSchema,
+    ),
+
+  createOtaFromRelease: (identifier: string, input: { version: string; actorUserId: string }) =>
+    request(
+      `/devices/${encodeURIComponent(identifier)}/ota`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      },
+      otaJobSchema.nullable(),
     ),
 
   getPendingNotifications: (limit = 20) =>

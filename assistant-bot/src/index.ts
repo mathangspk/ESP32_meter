@@ -45,6 +45,12 @@ type PendingState =
       action: "remove" | "reboot" | "factory_reset";
       reason?: string;
     }
+  | {
+      kind: "confirming_ota";
+      userId: string;
+      identifier: string;
+      version: string;
+    }
   | undefined;
 
 const pendingStates = new Map<number, PendingState>();
@@ -372,6 +378,38 @@ async function handleDeviceActionConfirmation(chatId: number, text: string): Pro
   return true;
 }
 
+async function handleOtaConfirmation(chatId: number, text: string): Promise<boolean> {
+  const pendingState = pendingStates.get(chatId);
+  if (!pendingState || pendingState.kind !== "confirming_ota") {
+    return false;
+  }
+
+  const answer = text.trim().toUpperCase();
+  if (answer === "CANCEL") {
+    pendingStates.delete(chatId);
+    await sendMessage(chatId, "OTA update cancelled.");
+    return true;
+  }
+  if (answer !== "CONFIRM") {
+    await sendMessage(chatId, "Please send CONFIRM to start OTA from the release catalog, or CANCEL to stop.");
+    return true;
+  }
+
+  try {
+    const job = await backendClient.createOtaFromRelease(pendingState.identifier, {
+      version: pendingState.version,
+      actorUserId: pendingState.userId,
+    });
+    pendingStates.delete(chatId);
+    await sendMessage(chatId, `OTA job accepted: ${job?.jobId ?? "unknown"} targeting ${pendingState.version}.`);
+  } catch (error) {
+    pendingStates.delete(chatId);
+    await sendMessage(chatId, error instanceof Error ? error.message : "Failed to start OTA update.");
+  }
+
+  return true;
+}
+
 async function handleCommand(chatId: number, text: string, userId: string, memberships: Membership[]) {
   const membershipPayload = await backendClient.getUserMemberships(userId);
   const user = membershipPayload.user;
@@ -594,6 +632,48 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
       return;
     }
 
+    case "/ota_update": {
+      const identifier = args[0]?.trim();
+      const version = args[1]?.trim();
+      if (!identifier || !version) {
+        await sendMessage(chatId, "Usage: /ota_update <serial_number_or_device_id> <firmware_version>");
+        return;
+      }
+
+      try {
+        const allowed = await canManageDevice(identifier, user.defaultTenantId, refreshedMemberships);
+        if (!allowed) {
+          await sendMessage(chatId, "You do not have permission to update this device.");
+          return;
+        }
+
+        const device = await backendClient.getDeviceHealth(identifier);
+        const policy = await backendClient.getFirmwarePolicy(identifier);
+        pendingStates.set(chatId, {
+          kind: "confirming_ota",
+          userId,
+          identifier,
+          version,
+        });
+
+        await sendMessage(
+          chatId,
+          [
+            "Confirm OTA update:",
+            `Device: ${device.displayName ?? device.serialNumber}`,
+            `Serial: ${device.serialNumber}`,
+            `Current firmware: ${policy.currentVersion ?? "unknown"}`,
+            `Target firmware: ${version}`,
+            "The backend will only start this if the target version exists in the compatible firmware release catalog and has a URL.",
+            "Send CONFIRM to continue, or CANCEL to stop.",
+          ].join("\n"),
+        );
+      } catch {
+        await sendMessage(chatId, "Device not found.");
+      }
+      return;
+    }
+
     default:
       await handleNaturalLanguage(chatId, text, user, refreshedMemberships);
   }
@@ -635,6 +715,10 @@ async function processMessage(update: TelegramUpdate): Promise<void> {
   }
 
   if (await handleDeviceActionConfirmation(chatId, text)) {
+    return;
+  }
+
+  if (await handleOtaConfirmation(chatId, text)) {
     return;
   }
 
