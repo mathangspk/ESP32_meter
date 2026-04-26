@@ -20,6 +20,7 @@ DataSender::DataSender()
       client(wifiClient), bufferIndex(0), bufferCount(0)
 {
     client.setBufferSize(2048);
+    client.setKeepAlive(120);
     client.setCallback([this](char *topic, byte *payload, unsigned int length)
                        { this->callback(topic, payload, length); });
 }
@@ -55,6 +56,34 @@ void DataSender::loop()
         reconnect();
     }
     client.loop();
+    processCompletedOta();
+}
+
+void DataSender::processCompletedOta()
+{
+    if (!otaResultReady)
+    {
+        return;
+    }
+
+    otaResultReady = false;
+    otaTaskRunning = false;
+
+    switch (otaTaskResult)
+    {
+    case OtaUpdateResult::Success:
+        publishOtaStatus(otaJobId, "success", otaResultMessage, otaTargetVersion);
+        delay(500);
+        ESP.restart();
+        break;
+    case OtaUpdateResult::NoUpdate:
+        publishOtaStatus(otaJobId, "success", otaResultMessage, otaTargetVersion);
+        break;
+    case OtaUpdateResult::UrlUnavailable:
+    case OtaUpdateResult::Failed:
+        publishOtaStatus(otaJobId, "failed", otaResultMessage, otaTargetVersion);
+        break;
+    }
 }
 
 void DataSender::reconnect()
@@ -159,6 +188,12 @@ void DataSender::callback(char *topic, byte *payload, unsigned int length)
 
     if (String(topic) == expectedTopic)
     {
+        if (otaTaskRunning)
+        {
+            publishOtaStatus(job_id, "failed", "OTA already in progress", target_version);
+            return;
+        }
+
         Serial.println("Received OTA update command");
         publishOtaStatus(job_id, "received", "OTA command received", target_version);
 
@@ -167,23 +202,18 @@ void DataSender::callback(char *topic, byte *payload, unsigned int length)
             Serial.printf("Starting OTA update from URL: %s\n", ota_url);
             publishOtaStatus(job_id, "downloading", "Firmware download started", target_version);
 
-            String otaMessage;
-            OtaUpdateResult result = handleOtaUpdate(ota_url, otaMessage);
+            otaJobId = String(job_id);
+            otaTargetVersion = String(target_version);
+            otaResultMessage = "";
+            otaTaskRunning = true;
+            otaResultReady = false;
 
-            switch (result)
+            OtaTaskContext *context = new OtaTaskContext{this, String(ota_url)};
+            if (xTaskCreatePinnedToCore(DataSender::otaTaskEntry, "otaUpdate", 16384, context, 1, nullptr, 1) != pdPASS)
             {
-            case OtaUpdateResult::Success:
-                publishOtaStatus(job_id, "success", otaMessage, target_version);
-                delay(500);
-                ESP.restart();
-                break;
-            case OtaUpdateResult::NoUpdate:
-                publishOtaStatus(job_id, "success", otaMessage, target_version);
-                break;
-            case OtaUpdateResult::UrlUnavailable:
-            case OtaUpdateResult::Failed:
-                publishOtaStatus(job_id, "failed", otaMessage, target_version);
-                break;
+                otaTaskRunning = false;
+                delete context;
+                publishOtaStatus(job_id, "failed", "Failed to start OTA task", target_version);
             }
         }
         else
@@ -192,6 +222,20 @@ void DataSender::callback(char *topic, byte *payload, unsigned int length)
             publishOtaStatus(job_id, "failed", "Invalid OTA URL", target_version);
         }
     }
+}
+
+void DataSender::otaTaskEntry(void *parameter)
+{
+    OtaTaskContext *context = static_cast<OtaTaskContext *>(parameter);
+    String message;
+    OtaUpdateResult result = handleOtaUpdate(context->url, message);
+
+    context->sender->otaTaskResult = result;
+    context->sender->otaResultMessage = message;
+    context->sender->otaResultReady = true;
+
+    delete context;
+    vTaskDelete(nullptr);
 }
 
 void DataSender::publishOtaStatus(const String &jobId, const String &status, const String &message, const String &targetVersion)

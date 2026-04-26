@@ -27,11 +27,11 @@ MeterReadings Meter::getReadings()
 
 void Meter::syncTime()
 {
-    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
     Serial.print("Syncing time");
     time_t now = time(nullptr);
     int retry = 0;
-    const int retry_count = 10;
+    const int retry_count = 40;
     while (now < 8 * 3600 * 2 && retry < retry_count)
     {
         delay(500);

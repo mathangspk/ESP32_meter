@@ -8,15 +8,37 @@ function getOtaCommandTopic(serialNumber: string): string {
   return `firmwareUpdateOTA/device/${serialNumber}`;
 }
 
+async function resolveFirmwareDownloadUrl(url: string): Promise<string> {
+  const parsed = new URL(url);
+  const shouldResolveGithubRelease =
+    parsed.hostname === "github.com" && parsed.pathname.includes("/releases/download/");
+
+  if (!shouldResolveGithubRelease) {
+    return url;
+  }
+
+  const response = await fetch(url, {
+    method: "HEAD",
+    redirect: "follow",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to resolve firmware URL: HTTP ${response.status}`);
+  }
+
+  return response.url;
+}
+
 export async function createOtaJob(input: OtaCommandRequest) {
   const jobId = randomUUID();
   const commandTopic = getOtaCommandTopic(input.serial_number);
+  const resolvedUrl = await resolveFirmwareDownloadUrl(input.url);
   const commandPayload: OtaCommandPayload = {
     job_id: jobId,
     device_id: input.device_id,
     serial_number: input.serial_number,
     version: input.version,
-    url: input.url,
+    url: resolvedUrl,
     sha256: input.sha256,
   };
 
@@ -26,7 +48,7 @@ export async function createOtaJob(input: OtaCommandRequest) {
     serialNumber: input.serial_number,
     commandTopic,
     targetVersion: input.version,
-    url: input.url,
+    url: resolvedUrl,
     sha256: input.sha256,
   });
 

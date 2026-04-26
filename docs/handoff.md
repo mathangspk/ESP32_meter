@@ -2,7 +2,26 @@
 
 ## Current Goal
 
-Finish the GitHub-hosted OTA success path and then run a longer stability check.
+Run a longer stability check on the recovered MQTT plus OTA path.
+
+## Current BMAD Phase
+
+Review
+
+## Recommended Model Lane
+
+- Brief and handoff updates: `gpt mini`
+- Mapping and repo exploration: `Minimax M2.5 free`
+- Code changes: `gpt-5.3 codex`
+- MQTT and OTA debugging plus final review: `gpt-5.4`
+
+## Escalation Trigger
+
+Escalate to `gpt-5.4` as soon as the next step depends on MQTT reconnect timing, OTA runtime state, or a firmware-versus-infra root-cause decision.
+
+## Scorecard Reminder
+
+After this non-trivial session, append a short entry to `docs/bmad-scorecard.md`.
 
 ## Confirmed State
 
@@ -20,8 +39,8 @@ Finish the GitHub-hosted OTA success path and then run a longer stability check.
 PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 ```
 - Wi-Fi connection succeeds on the device
-- Current MQTT connect attempt fails with `rc=-2`
-- Current NTP sync attempt fails with `Failed to sync time`
+- The earlier MQTT `rc=-2` failure was traced to a network mismatch: the ESP32 had rejoined SSID `Thanh` on subnet `192.168.11.x` while the local broker host was on `192.168.1.x`
+- Current NTP sync attempt still fails with `Failed to sync time`
 - Backend implementation plan is now fixed to `TypeScript + Express + MongoDB + Mosquitto + Telegram`
 - `colima` + Docker CLI now work on this machine for local container testing
 - Local container stack now starts successfully with `docker --context colima compose -f docker-compose.local.yml up --build -d`
@@ -31,10 +50,16 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - Recovered path was verified locally against MongoDB state and alert history
 - Backend bug fixed: recovered events now clear `isOffline` even if Telegram send fails
 - ESP32 web config was updated to `mqtt_server=192.168.1.20` and rebooted successfully
-- Real ESP32 telemetry is now being ingested by the local backend via the host Mosquitto broker
+- Real ESP32 telemetry is again reaching the local backend after fixing the network mismatch and restoring MQTT connectivity to the Docker-only Mosquitto path
 - After the reboot, the device synced time successfully (`Time synced!`), so NTP is currently not failing in this path
-- Local backend currently subscribes to the host broker using `MQTT_URL=mqtt://host.lima.internal:1883` in `backend/.env.local`
-- Important local-network finding: the real ESP32 is publishing to the native host `mosquitto` on macOS, not the Mosquitto container inside `colima`
+- Local backend now uses the Docker-network broker with `MQTT_URL=mqtt://mosquitto:1883` in `backend/.env.local`
+- The native Homebrew `mosquitto` service on macOS has been stopped so local MQTT testing can converge on the Docker-only broker at `192.168.1.20:1883`
+- Local Docker Mosquitto host publish port is now `1884`, and a host TCP relay is used on `1883` so LAN devices can still target `192.168.1.20:1883` while the broker itself stays inside Docker
+- Firmware now supports optional compile-time forced Wi-Fi credentials before falling back to WiFiManager, which was used locally to recover the device from the wrong saved SSID without storing credentials in the repo
+- Firmware NTP sync now retries longer and uses `time.google.com` in addition to the previous servers
+- Backend now resolves stable GitHub release download URLs into fresh signed asset URLs per OTA job so catalog entries do not expire at runtime
+- Firmware OTA now runs in a dedicated FreeRTOS task with a larger stack instead of inside the MQTT callback loop task
+- Firmware OTA no longer performs a separate preflight HTTP GET before `HTTPUpdate`, which removed the earlier OTA URL crash path
 - Backend now supports OTA jobs over HTTP and MQTT:
   - `POST /ota/jobs`
   - `GET /ota/jobs`
@@ -145,12 +170,13 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - Firmware release catalog now contains OTA verification versions with URLs and SHA256 digests
 - Compose local and production stacks now include the `assistant-bot` service
 - GitHub workflows now build and publish `assistant-bot` images as well as the backend image
+- The latest verified OTA retry `4863f80d-bc41-41ab-a202-1f63d8c1e71e` reached `received -> downloading -> success`, and the device came back reporting firmware `1.0.1-ota-verification-3`
 
 ## Next Recommended Steps
 
-1. Observe the live ESP32 serial log from a normal local terminal during one more OTA attempt so the post-`received` failure point can be seen without the agent-induced reboot side effect.
-2. Finish the OTA success path for the latest verification release.
-3. Run a longer stability check after OTA success is confirmed.
+1. Run a longer stability check with `SN005` on firmware `1.0.1-ota-verification-3` and confirm telemetry stays healthy over time.
+2. Verify OTA once more without serial intervention only if you want an extra confidence pass on the new firmware image.
+3. Decide whether the improved OTA/NTP logic should be turned into a verified milestone commit.
 
 ## Known Constraints
 
@@ -160,12 +186,12 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - Interactive serial monitoring from the agent shell is still limited
 - Local Telegram delivery has not been verified yet because `backend/.env.local` currently uses placeholder credentials
 - Reading the USB serial port from the agent resets the ESP32, so serial captures should be treated as reboot-triggering actions in this environment
-- A native Homebrew `mosquitto` service is running on the macOS host and currently owns port `1883`
+- The local broker target has been migrated to the Docker `mosquitto` service and the device can now reconnect through it, but serial reads from the agent still reboot the board and can disrupt live runtime checks
 - The current OTA implementation stores `sha256` metadata but does not enforce checksum validation in firmware yet
 - The legacy direct `POST /ota/jobs` endpoint still accepts explicit URL payloads for engineering dry-runs; user-facing bot OTA uses the policy-gated release endpoint
 - Reading USB serial from the agent still reboots the ESP32, which makes OTA runtime diagnosis less reliable inside this shell than in a normal local terminal
 - Telegram outbound is verified, but inbound command verification through live Telegram chat is still not fully captured in this session log
-- GitHub-hosted OTA has improved from `URL is not reachable` to live `received` status, but it still does not reach `downloading` or `success` yet
+- Serial reads from the agent still reboot the board, so longer runtime checks should avoid opening the serial port unless actively debugging
 
 ## Most Relevant Commands
 
@@ -223,6 +249,12 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Evidence: a test `notification_queue` record with target `2070483485` was delivered and stored as `status=sent`
 - Evidence: OTA verification release assets were created on GitHub Releases and registered in backend firmware catalog with SHA256 values
 - Evidence: the latest OTA job `a5c7364c-4e0f-450f-8f8e-15e118734e1b` reached `status=received` against the long signed GitHub asset URL, confirming that the enlarged MQTT and JSON buffers are working
+- Evidence: after local Wi-Fi recovery, serial logs showed `connected`, subscription to both MQTT topics, and `Data sent to MQTT: ...` with device IP `192.168.1.22`
+- Evidence: `GET /devices/SN005/health` now returns `isOffline=false` with `lastSeenAt=2026-04-26T12:15:57Z`
+- Evidence: OTA job `c91566e6-fb3a-4e8d-adc1-a9bed0f3f203` reached `status=downloading` with `lastStatusMessage="Firmware download started"`
+- Evidence: serial trace after the NTP fix showed `Time synced!` during boot on SSID `Thanh`
+- Evidence: OTA job `4863f80d-bc41-41ab-a202-1f63d8c1e71e` reached `status=success` with `lastStatusMessage="Update applied successfully"`
+- Evidence: `GET /devices/SN005/health` now reports `lastFirmwareVersion=1.0.1-ota-verification-3` and `lastOtaStatus=success`
 
 ## Suggested New Session Prompt
 

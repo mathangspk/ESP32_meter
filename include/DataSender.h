@@ -5,6 +5,7 @@
 #include <PubSubClient.h>
 #include <WiFiClient.h>
 #include "types/DataTypes.h"
+#include "OTAUpdate.h"
 
 class DataSender
 {
@@ -20,11 +21,19 @@ public:
     PubSubClient &getClient();
 
 private:
+    struct OtaTaskContext
+    {
+        DataSender *sender;
+        String url;
+    };
+
     void reconnect();
+    void processCompletedOta();
     String getTimestamp();
     String createPayload(String serial_number, float voltage, float current, float power, float energy, String IPAddress);
     void callback(char *topic, byte *payload, unsigned int length);
     void publishOtaStatus(const String &jobId, const String &status, const String &message, const String &targetVersion);
+    static void otaTaskEntry(void *parameter);
 
     String mqttServer;
     int mqttPort;
@@ -49,6 +58,13 @@ private:
     BufferedData dataBuffer[BUFFER_SIZE];
     int bufferIndex;
     int bufferCount;
+
+    volatile bool otaTaskRunning = false;
+    volatile bool otaResultReady = false;
+    OtaUpdateResult otaTaskResult = OtaUpdateResult::Failed;
+    String otaJobId;
+    String otaTargetVersion;
+    String otaResultMessage;
 
     unsigned long lastReconnectAttempt = 0;
     const unsigned long RECONNECT_INTERVAL = 5000; // 5 seconds

@@ -2,7 +2,7 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2
     ports:
-      - "1883:1883"
+      - "1884:1883"
     volumes:
       - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_local_data:/mosquitto/data

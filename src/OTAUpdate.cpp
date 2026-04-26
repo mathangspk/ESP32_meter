@@ -33,14 +33,6 @@ bool checkOtaUrlAvailable(const String &otaUrl)
 
 OtaUpdateResult handleOtaUpdate(const String &binUrl, String &message)
 {
-    Serial.println("Bắt đầu kiểm tra OTA URL: " + binUrl);
-    if (!checkOtaUrlAvailable(binUrl))
-    {
-        Serial.println("Không thể tiến hành OTA do link không khả dụng.");
-        message = "OTA URL is not reachable";
-        return OtaUpdateResult::UrlUnavailable;
-    }
-
     Serial.println("Bắt đầu OTA từ URL: " + binUrl);
     WiFiClientSecure client;
     client.setInsecure(); // Bỏ qua kiểm tra chứng chỉ SSL
