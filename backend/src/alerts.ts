@@ -1,7 +1,6 @@
 import { config } from "./config";
 import { logger } from "./logger";
 import { AlertEventRecord, DeviceStateRecord, mongoService } from "./mongodb";
-import { sendTelegramMessage } from "./telegram";
 import { TelemetryPayload } from "./types";
 
 function formatOfflineMessage(device: DeviceStateRecord): string {
@@ -42,7 +41,11 @@ export async function handleTelemetryAlertTransitions(
   const message = formatRecoveredMessage(payload);
 
   try {
-    await sendTelegramMessage(message);
+    await mongoService.enqueueTelegramNotification("device.recovered", message, {
+      deviceId: payload.device_id,
+      serialNumber: payload.serial_number,
+      event: "recovered",
+    });
     await mongoService.markRecovered(payload.device_id, sentAt);
     await persistAlert({
       deviceId: payload.device_id,
@@ -50,10 +53,11 @@ export async function handleTelemetryAlertTransitions(
       type: "recovered",
       message,
       sentAt,
-      status: "sent",
+      status: "queued",
     });
   } catch (error) {
-    logger.error({ err: error, deviceId: payload.device_id }, "Failed to send recovered alert");
+    logger.error({ err: error, deviceId: payload.device_id }, "Failed to queue recovered alert");
+    await mongoService.markRecovered(payload.device_id, sentAt);
     await persistAlert({
       deviceId: payload.device_id,
       serialNumber: payload.serial_number,
@@ -74,7 +78,11 @@ export async function checkOfflineDevices(): Promise<void> {
     const message = formatOfflineMessage(device);
 
     try {
-      await sendTelegramMessage(message);
+      await mongoService.enqueueTelegramNotification("device.offline", message, {
+        deviceId: device.deviceId,
+        serialNumber: device.serialNumber,
+        event: "offline",
+      });
       await mongoService.markOffline(device.deviceId, sentAt);
       await persistAlert({
         deviceId: device.deviceId,
@@ -82,10 +90,10 @@ export async function checkOfflineDevices(): Promise<void> {
         type: "offline",
         message,
         sentAt,
-        status: "sent",
+        status: "queued",
       });
     } catch (error) {
-      logger.error({ err: error, deviceId: device.deviceId }, "Failed to send offline alert");
+      logger.error({ err: error, deviceId: device.deviceId }, "Failed to queue offline alert");
       await mongoService.markOffline(device.deviceId, sentAt);
       await persistAlert({
         deviceId: device.deviceId,

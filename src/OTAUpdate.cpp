@@ -22,30 +22,39 @@ bool checkOtaUrlAvailable(const String &otaUrl)
     }
 }
 
-void handleOtaUpdate(const String &binUrl)
+OtaUpdateResult handleOtaUpdate(const String &binUrl, String &message)
 {
     Serial.println("Bắt đầu kiểm tra OTA URL: " + binUrl);
     if (!checkOtaUrlAvailable(binUrl))
     {
         Serial.println("Không thể tiến hành OTA do link không khả dụng.");
-        return;
+        message = "OTA URL is not reachable";
+        return OtaUpdateResult::UrlUnavailable;
     }
+
     Serial.println("Bắt đầu OTA từ URL: " + binUrl);
     WiFiClientSecure client;
     client.setInsecure(); // Bỏ qua kiểm tra chứng chỉ SSL
+    httpUpdate.rebootOnUpdate(false);
 
     t_httpUpdate_return ret = httpUpdate.update(client, binUrl);
 
     switch (ret)
     {
     case HTTP_UPDATE_FAILED:
-        Serial.printf("OTA thất bại. Lỗi (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
-        break;
+        message = httpUpdate.getLastErrorString();
+        Serial.printf("OTA thất bại. Lỗi (%d): %s\n", httpUpdate.getLastError(), message.c_str());
+        return OtaUpdateResult::Failed;
     case HTTP_UPDATE_NO_UPDATES:
         Serial.println("Không có bản cập nhật mới.");
-        break;
+        message = "No updates available";
+        return OtaUpdateResult::NoUpdate;
     case HTTP_UPDATE_OK:
         Serial.println("Cập nhật thành công! Đang khởi động lại...");
-        break;
+        message = "Update applied successfully";
+        return OtaUpdateResult::Success;
     }
+
+    message = "Unknown OTA result";
+    return OtaUpdateResult::Failed;
 }

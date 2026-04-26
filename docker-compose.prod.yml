@@ -31,6 +31,14 @@ services:
       retries: 5
       start_period: 15s
 
+  assistant-bot:
+    image: ${ASSISTANT_BOT_IMAGE:-ghcr.io/mathangspk/esp32-loss-power-assistant-bot:latest}
+    restart: unless-stopped
+    env_file:
+      - ./.env.prod
+    depends_on:
+      - backend
+
 volumes:
   mosquitto_prod_data:
   mongodb_prod_data:

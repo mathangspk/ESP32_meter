@@ -7,6 +7,7 @@ Production runs these services together:
 - `mosquitto`
 - `mongodb`
 - `backend`
+- `assistant-bot`
 
 MongoDB stays internal to the Docker network and is not published on the VPS host.
 
@@ -32,9 +33,24 @@ TELEGRAM_BOT_TOKEN=replace_me
 TELEGRAM_CHAT_ID=replace_me
 OFFLINE_TIMEOUT_SECONDS=45
 CHECK_INTERVAL_SECONDS=10
+PLATFORM_ADMIN_USER_ID=platform-admin
+PLATFORM_ADMIN_TELEGRAM_ID=replace_me
+PLATFORM_ADMIN_DISPLAY_NAME=Platform Admin
+BOOTSTRAP_TENANT_ID=tenant-default
+BOOTSTRAP_TENANT_NAME=Default Tenant
+BOOTSTRAP_SITE_ID=site-default
+BOOTSTRAP_SITE_NAME=Default Site
+BOOTSTRAP_FIRMWARE_VERSION=1.0.0
+BOOTSTRAP_FIRMWARE_BOARD_TYPE=
+BACKEND_BASE_URL=http://backend:3000
+TELEGRAM_POLL_INTERVAL_MS=3000
+NOTIFICATION_POLL_INTERVAL_MS=5000
+GROQ_API_KEY=replace_me
+GROQ_MODEL=llama-3.1-8b-instant
+GROQ_BASE_URL=https://api.groq.com/openai/v1
 ```
 
-If you want to pin a non-default image tag, export `BACKEND_IMAGE` before running `docker compose` or create a root `.env` file with that value.
+If you want to pin non-default image tags, export `BACKEND_IMAGE` and `ASSISTANT_BOT_IMAGE` before running `docker compose` or create a root `.env` file with those values.
 
 ## Pull And Start
 

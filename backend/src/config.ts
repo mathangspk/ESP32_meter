@@ -14,6 +14,15 @@ const envSchema = z.object({
   TELEGRAM_CHAT_ID: z.string().min(1),
   OFFLINE_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(45),
   CHECK_INTERVAL_SECONDS: z.coerce.number().int().positive().default(10),
+  PLATFORM_ADMIN_USER_ID: z.string().default("platform-admin"),
+  PLATFORM_ADMIN_TELEGRAM_ID: z.string().optional().default(""),
+  PLATFORM_ADMIN_DISPLAY_NAME: z.string().default("Platform Admin"),
+  BOOTSTRAP_TENANT_ID: z.string().default("tenant-default"),
+  BOOTSTRAP_TENANT_NAME: z.string().default("Default Tenant"),
+  BOOTSTRAP_SITE_ID: z.string().default("site-default"),
+  BOOTSTRAP_SITE_NAME: z.string().default("Default Site"),
+  BOOTSTRAP_FIRMWARE_VERSION: z.string().default("1.0.0"),
+  BOOTSTRAP_FIRMWARE_BOARD_TYPE: z.string().default(""),
 });
 
 export const config = envSchema.parse(process.env);

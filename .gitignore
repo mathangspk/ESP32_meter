@@ -6,4 +6,7 @@
 backend/node_modules
 backend/dist
 backend/.env.local
+assistant-bot/node_modules
+assistant-bot/dist
+assistant-bot/.env.local
 .env.prod

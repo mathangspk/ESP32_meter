@@ -12,6 +12,7 @@ DataSender::DataSender()
     : mqttServer("113.161.220.166"), mqttPort(1883), deviceId("5"), serialNumber("SN005"),
       client(wifiClient), bufferIndex(0), bufferCount(0)
 {
+    client.setBufferSize(512);
     client.setCallback([this](char *topic, byte *payload, unsigned int length)
                        { this->callback(topic, payload, length); });
 }
@@ -112,22 +113,77 @@ void DataSender::callback(char *topic, byte *payload, unsigned int length)
         return;
     }
 
-    const char *ota_url = doc["OTAurl"]; // 👉 Lấy ra trường OTAurl
+    const char *ota_url = doc["url"] | doc["OTAurl"];
+    const char *job_id = doc["job_id"] | "";
+    const char *target_version = doc["version"] | "";
     String expectedTopic = "firmwareUpdateOTA/device/" + String(serialNumber);
 
     if (String(topic) == expectedTopic)
     {
         Serial.println("Received OTA update command");
+        publishOtaStatus(job_id, "received", "OTA command received", target_version);
 
         if (ota_url && String(ota_url).startsWith("http"))
         {
             Serial.printf("Starting OTA update from URL: %s\n", ota_url);
-            handleOtaUpdate(ota_url);
+            publishOtaStatus(job_id, "downloading", "Firmware download started", target_version);
+
+            String otaMessage;
+            OtaUpdateResult result = handleOtaUpdate(ota_url, otaMessage);
+
+            switch (result)
+            {
+            case OtaUpdateResult::Success:
+                publishOtaStatus(job_id, "success", otaMessage, target_version);
+                delay(500);
+                ESP.restart();
+                break;
+            case OtaUpdateResult::NoUpdate:
+                publishOtaStatus(job_id, "success", otaMessage, target_version);
+                break;
+            case OtaUpdateResult::UrlUnavailable:
+            case OtaUpdateResult::Failed:
+                publishOtaStatus(job_id, "failed", otaMessage, target_version);
+                break;
+            }
         }
         else
         {
             Serial.println("Invalid OTA URL received!");
+            publishOtaStatus(job_id, "failed", "Invalid OTA URL", target_version);
         }
+    }
+}
+
+void DataSender::publishOtaStatus(const String &jobId, const String &status, const String &message, const String &targetVersion)
+{
+    if (!client.connected())
+    {
+        Serial.println("Cannot publish OTA status: MQTT not connected");
+        return;
+    }
+
+    StaticJsonDocument<512> doc;
+    doc["job_id"] = jobId;
+    doc["device_id"] = deviceId;
+    doc["serial_number"] = serialNumber;
+    doc["status"] = status;
+    doc["message"] = message;
+    doc["current_version"] = FIRMWARE_VERSION;
+    doc["target_version"] = targetVersion;
+    doc["timestamp"] = getTimestamp();
+
+    String payload;
+    serializeJson(doc, payload);
+
+    String topic = "meter/" + deviceId + "/ota/status";
+    if (client.publish(topic.c_str(), payload.c_str()))
+    {
+        Serial.printf("OTA status published: %s\n", payload.c_str());
+    }
+    else
+    {
+        Serial.println("Failed to publish OTA status");
     }
 }
 

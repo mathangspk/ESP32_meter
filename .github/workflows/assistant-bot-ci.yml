@@ -1,0 +1,28 @@
+name: Assistant Bot CI
+
+on:
+  push:
+    paths:
+      - "assistant-bot/**"
+      - ".github/workflows/assistant-bot-ci.yml"
+  pull_request:
+    paths:
+      - "assistant-bot/**"
+      - ".github/workflows/assistant-bot-ci.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: assistant-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: assistant-bot/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
