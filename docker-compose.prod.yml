@@ -1,0 +1,36 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_prod_data:/mosquitto/data
+
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongodb_prod_data:/data/db
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/mathangspk/esp32-loss-power-backend:latest}
+    restart: unless-stopped
+    env_file:
+      - ./.env.prod
+    depends_on:
+      - mosquitto
+      - mongodb
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  mosquitto_prod_data:
+  mongodb_prod_data:
