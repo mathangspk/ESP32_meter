@@ -1,47 +1,50 @@
+version: "3.3"
+
 services:
   mosquitto:
     image: eclipse-mosquitto:2
+    restart: unless-stopped
     ports:
-      - "1884:1883"
+      - "1883:1883"
     volumes:
       - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ./infra/mosquitto/passwd:/mosquitto/config/passwd:ro
-      - mosquitto_local_data:/mosquitto/data
+      - ./infra/mosquitto/passwd.user:/mosquitto/config/passwd:ro
+      - mosquitto_prod_data:/mosquitto/data
 
   mongodb:
     image: mongo:7
-    ports:
-      - "27017:27017"
+    restart: unless-stopped
     volumes:
-      - mongodb_local_data:/data/db
+      - mongodb_prod_data:/data/db
 
   backend:
-    image: ${BACKEND_LOCAL_IMAGE:-esp32-loss-power-backend:local}
     build:
       context: ./backend
+    image: esp32-loss-power-backend:vps
+    restart: unless-stopped
     env_file:
-      - ./backend/.env.local
-    ports:
-      - "127.0.0.1:3000:3000"
+      - ./.env.prod
     depends_on:
       - mosquitto
       - mongodb
+    ports:
+      - "127.0.0.1:3000:3000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 15s
 
   assistant-bot:
-    image: ${ASSISTANT_BOT_LOCAL_IMAGE:-esp32-loss-power-assistant-bot:local}
     build:
       context: ./assistant-bot
+    image: esp32-loss-power-assistant-bot:vps
+    restart: unless-stopped
     env_file:
-      - ./assistant-bot/.env.local
+      - ./.env.prod
     depends_on:
       - backend
 
 volumes:
-  mosquitto_local_data:
-  mongodb_local_data:
+  mosquitto_prod_data:
+  mongodb_prod_data:

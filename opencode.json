@@ -2,14 +2,22 @@
   "$schema": "https://opencode.ai/config.json",
   "agent": {
     "explore": {
+      "description": "Explores code and maps read-only VPS/runtime state.",
       "mode": "subagent",
-      "model": "opencode/minimax-m2.5-free",
+      "model": "opencode/big-pickle",
       "temperature": 0.1
+    },
+    "general": {
+      "description": "Runs broader read-only review and production verification work when the runtime only exposes built-in subagent types.",
+      "mode": "subagent",
+      "model": "opencode/big-pickle",
+      "temperature": 0.1,
+      "prompt": "You are a general-purpose subagent for this repository. When asked to do post-deploy or VPS verification, prefer read-only operational checks: health endpoints, docker container state, broker connectivity, device ingest evidence, and concise blocker reporting. Do not modify files, restart services, deploy images, or change runtime state unless the parent task explicitly requests that. Return exact evidence and the next safe action."
     },
     "ops-light": {
       "description": "Handles simple Git housekeeping such as status, diff, add, commit, and push.",
       "mode": "subagent",
-      "model": "opencode/minimax-m2.5-free",
+      "model": "opencode/big-pickle",
       "temperature": 0.1,
       "permission": {
         "edit": "deny",
@@ -23,6 +31,31 @@
           "git commit *": "allow",
           "git push": "allow",
           "git push *": "allow"
+        }
+      }
+    },
+    "vps-verify": {
+      "description": "Runs read-only post-deploy verification for the VPS stack, device ingest, and production health checks.",
+      "mode": "subagent",
+      "model": "opencode/big-pickle",
+      "temperature": 0.1,
+      "prompt": "You are a production verification subagent for this repository. Focus on read-only checks after local-to-VPS promotion. Verify health endpoints, docker container state, broker connectivity, device ingest evidence, and bot/device API state. Do not modify files, restart services, deploy images, change firewall state, or edit configuration. Return concise operational findings, exact evidence, blockers, and the next safe action.",
+      "permission": {
+        "edit": "deny",
+        "webfetch": "deny",
+        "bash": {
+          "*": "deny",
+          "curl *": "allow",
+          "ssh *": "allow",
+          "docker ps*": "allow",
+          "docker logs *": "allow",
+          "docker inspect *": "allow",
+          "docker exec *": "allow",
+          "docker run *": "allow",
+          "docker compose *": "allow",
+          "docker-compose *": "allow",
+          "python3 *": "allow",
+          "ls *": "allow"
         }
       }
     }

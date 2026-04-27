@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Verify natural-language Telegram analytics questions against the new backend summary path.
+Prepare and execute a production-hardened VPS deployment for the Docker stack.
 
 ## Current BMAD Phase
 
@@ -131,6 +131,38 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
   - what those devices are called
   - combined count plus device-name questions
 - `assistant-bot` now resolves devices from accessible tenant or admin scope before asking Groq to phrase an analytics answer naturally in Vietnamese
+- A working SSH key path now exists for VPS access:
+  - local alias: `vps-prod`
+  - user: `tma_agi`
+  - Tailscale IP: `100.77.157.70`
+  - SSH port: `4422`
+- Verified SSH key login to the VPS now works with `~/.ssh/opencode_vps`
+- Docker workflow is now documented as `local Docker first -> VPS deploy second` in `docs/docker-workflow.md`
+- Deploy memory now lives in `docs/deploy-memory.md` and records intentional local↔VPS Docker differences plus exact VPS promotion steps
+- Post-deploy verification is now configured for `opencode/big-pickle`; prefer subagent `vps-verify` when the runtime exposes custom agents, otherwise use built-in `general` with the same read-only verification contract
+- A live VPS deploy is now running from `/home/tma_agi/esp32_loss_power_deploy`
+- Current VPS stack state verified:
+  - `backend` up on `127.0.0.1:3000`
+  - `mongodb` up
+  - `mosquitto` up on host `1883`
+  - `assistant-bot` up
+- VPS backend `GET /healthz` now returns `{"status":"ok","mqttConnected":true,"mongodbConnected":true,...}`
+- Current production MQTT credentials deployed on VPS are:
+  - `MQTT_USERNAME=meterMQTT`
+  - `MQTT_PASSWORD=meterMQTT`
+- During this deploy, normal remote image pulls were blocked by the VPS Docker credential path, so the successful path used:
+  - clean `DOCKER_CONFIG=/home/tma_agi/empty-docker-config`
+  - source sync to `/home/tma_agi/esp32_loss_power_deploy`
+  - resolved `docker-compose.deploy.yml` on the VPS
+- During this deploy, the repo `docker-compose.prod.yml` image interpolation needed quoting for compatibility with stricter Compose parsers
+- The current live VPS runtime is now recorded in `docs/vps-runtime.md`, including deploy path, compose file, Docker auth workaround, and boot behavior
+- `SN005` is now publishing to VPS and has been claimed successfully in production
+- Current production deployment target assumptions are:
+  - public MQTT IP: `113.161.220.166`
+  - backend admin/API should stay on `127.0.0.1:3000` and be accessed through Tailscale
+  - MongoDB should remain internal-only
+  - MongoDB local backups should be stored under `/opt/backups/mongodb`
+  - OTA artifacts should continue to use GitHub Releases
 - Backend now exposes firmware release management endpoints:
   - `GET /admin/firmware/releases`
   - `POST /admin/firmware/releases`

@@ -5,15 +5,23 @@
 - Docker Desktop or another Docker-compatible runtime installed locally
 - If using `colima` on macOS, start it first with `colima start`
 - Telegram bot token and chat ID for live delivery checks
+- `infra/mosquitto/passwd` created with a real MQTT username/password
 
 ## Setup
 
 1. Copy `backend/.env.example` to `backend/.env.local`.
 2. Fill in `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
 3. Keep `MQTT_URL=mqtt://mosquitto:1883` and `MONGODB_URI=mongodb://mongodb:27017` for the local stack.
-4. Placeholder Telegram values are enough to verify MongoDB state transitions, but live Telegram delivery will fail until real credentials are set.
-5. Copy `assistant-bot/.env.example` to `assistant-bot/.env.local` and use the same real `TELEGRAM_BOT_TOKEN` when you want to test Telegram polling and queued notifications.
-6. Set `PLATFORM_ADMIN_TELEGRAM_ID` in `backend/.env.local` to the Telegram chat ID of the operator account if you want that account to start with platform-admin access.
+4. Fill `MQTT_USERNAME` and `MQTT_PASSWORD` with same values used to generate `infra/mosquitto/passwd`.
+5. Placeholder Telegram values are enough to verify MongoDB state transitions, but live Telegram delivery will fail until real credentials are set.
+6. Copy `assistant-bot/.env.example` to `assistant-bot/.env.local` and use the same real `TELEGRAM_BOT_TOKEN` when you want to test Telegram polling and queued notifications.
+7. Set `PLATFORM_ADMIN_TELEGRAM_ID` in `backend/.env.local` to the Telegram chat ID of the operator account if you want that account to start with platform-admin access.
+
+Create the password file if you do not have it yet:
+
+```bash
+docker run --rm -it -v "$PWD/infra/mosquitto:/work" eclipse-mosquitto:2 mosquitto_passwd -c /work/passwd <mqtt_username>
+```
 
 ## Start The Stack
 

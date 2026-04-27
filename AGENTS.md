@@ -49,8 +49,11 @@ Treat this file as a delegation policy, not as a runtime scheduler.
 - Use `explore` before non-trivial cross-file work when the relevant code path is not already fully known.
 - Mapping work should default to `explore`.
 - Use `explore` for open-ended repo mapping, file discovery, endpoint tracing, schema tracing, and call-flow discovery.
+- Use `explore` for first-pass VPS discovery and inspection work, such as checking deployed services, filesystem layout, config locations, logs, ports, and process state before making changes.
 - Use `general` for cross-file review, operational risk review, tradeoff research, and broader reasoning after an implementation pass.
+- In runtimes that do not expose custom verification subagents through the Task tool, use built-in `general` for read-only post-deploy verification.
 - Use `ops-light` for simple Git chores such as `git status`, `git diff`, `git log`, `git add`, `git commit`, and `git push` when that subagent is available in the runtime.
+- Use `vps-verify` for read-only post-deploy verification after the stack is already up and the goal is to confirm container health, API health, broker behavior, and live device ingest.
 - Do not use subagents for single-file trivial edits or obvious local changes.
 - For firmware plus backend plus bot interactions, do a mapping pass first instead of jumping straight into code edits.
 - After non-trivial multi-file changes, run a separate review pass before treating the work as complete.
@@ -73,6 +76,8 @@ When delegating work, the main agent must provide a concrete task contract.
 
 Use for repo exploration and mapping.
 
+This also includes read-only VPS discovery and inspection when the goal is to understand the remote environment before acting.
+
 Required prompt inputs:
 
 - task goal
@@ -87,6 +92,13 @@ Expected output:
 - key functions, endpoints, or flows
 - likely failure points or risk points
 - open questions if the map is still incomplete
+
+For VPS inspection tasks, expected output should instead include:
+
+- relevant services, processes, directories, ports, or config files
+- current runtime state and notable mismatches
+- likely operational risks or unknowns
+- exact next inspection or deployment step
 
 ### `general`
 
@@ -124,6 +136,28 @@ Expected output:
 - commit result if one was requested
 - push result if one was requested
 - any Git safety blockers
+
+### `vps-verify`
+
+Use for read-only production verification after deploy or cutover.
+
+Required prompt inputs:
+
+- deploy target path or compose file if relevant
+- exact verification goal
+- whether live device ingest is expected already
+- exact endpoints, topics, or device IDs to confirm
+- exact output format expected back
+
+Expected output:
+
+- container/runtime status summary
+- health endpoint results
+- broker and device-ingest evidence if applicable
+- blockers or mismatches
+- exact next safe action
+
+If the current runtime cannot invoke `vps-verify` directly, use `general` with the same prompt contract.
 
 ## Visibility Rules
 

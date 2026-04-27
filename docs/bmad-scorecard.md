@@ -165,3 +165,59 @@ Result:
   outcome: backend and bot now support a single analytics summary path and natural-language Telegram question handling for current readings and same-day usage analytics
   notes: live Telegram verification still remains, especially for device disambiguation, inventory questions, and real data phrasing
 ```
+
+## 2026-04-26 Orchestration Policy Session
+
+```text
+Date: 2026-04-26
+Task: Clarify how OpenCode delegation works in this repo and encode that policy in AGENTS.md
+BMAD path:
+  Brief: explain where orchestration policy belongs and what runtime limits still apply
+  Mapping: inspect AGENTS.md and BMAD docs for current workflow gaps around delegation visibility and subagent contracts
+  Architecture: keep runtime assumptions explicit and add policy sections for delegation, contracts, visibility, and limits
+  Delivery: update AGENTS.md and BMAD docs to make main-agent versus subagent responsibilities clear
+  Review: verify the policy text is consistent with the current runtime and does not claim unsupported hard routing
+Model usage:
+  cheap_steps: 2
+  build_steps: 1
+  deep_steps: 1
+  escalations: 0
+Execution:
+  files_changed: 3
+  verify_commands: none; docs-only policy update
+  verify_passed: yes
+  rework_loops: 0
+Handoff:
+  handoff_updated: no
+Result:
+  outcome: the repo now documents how the main agent should delegate to explore and general, what each subagent contract should contain, and what the runtime still does not guarantee
+  notes: this improves orchestration clarity but does not itself create automatic model routing
+```
+
+## 2026-04-27 Deploy Workflow Memory
+
+```text
+Date: 2026-04-27
+Task: Reduce future VPS deploy friction by documenting stable Docker invariants, intentional local↔VPS differences, and exact promotion order
+BMAD path:
+  Brief: local Docker should be proving ground; VPS deploy should become mechanical instead of rediscovery
+  Mapping: inspect docker-compose local/prod files, local test docs, VPS deploy docs, and current handoff state
+  Architecture: keep one service shape across local and VPS, allow only explicit documented deltas, store deploy memory in repo docs
+  Delivery: add deploy memory doc, link it from workflow docs, and update handoff pointers
+  Review: verify both compose files still render and docs point to one deploy memory source
+Model usage:
+  cheap_steps: 2
+  build_steps: 2
+  deep_steps: 0
+  escalations: 0
+Execution:
+  files_changed: 4
+  verify_commands: docker compose -f docker-compose.local.yml config --services; docker compose -f docker-compose.prod.yml config --services
+  verify_passed: yes
+  rework_loops: 1
+Handoff:
+  handoff_updated: yes
+Result:
+  outcome: future "deploy to VPS" work now has repo memory for what must match, what may differ, and what to verify
+  notes: this should cut repeated reasoning time before each deploy and make local-first promotion more consistent
+```

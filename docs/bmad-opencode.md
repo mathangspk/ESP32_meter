@@ -14,6 +14,22 @@ BMAD in this repo means:
 
 It is a workflow, not a required package or plugin.
 
+## Delegation Model
+
+BMAD in this repo assumes a main-agent-plus-subagent workflow.
+
+- `AGENTS.md` defines the repository policy for when to delegate.
+- The main agent remains responsible for final implementation, verification, and git actions.
+- `explore` is the preferred mapping subagent.
+- `general` is the preferred review and research subagent.
+
+This is policy guidance, not a hard runtime router.
+
+- The available subagent types come from the OpenCode runtime.
+- The main agent must explicitly invoke subagents through runtime tools.
+- Exact model-per-subagent routing may not be directly configurable in the current runtime.
+- When runtime routing is not enforceable, use the routing table as governance and audit intent.
+
 ## Model Lanes
 
 - `gpt mini`: very short summaries, checklists, prompt cleanup, handoff drafts.
