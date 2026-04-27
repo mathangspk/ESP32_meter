@@ -1,5 +1,16 @@
 #include "ConfigManager.h"
 
+namespace
+{
+String getIdentitySuffix()
+{
+    char suffix[9];
+    uint64_t efuseMac = ESP.getEfuseMac();
+    snprintf(suffix, sizeof(suffix), "%08llX", static_cast<unsigned long long>(efuseMac & 0xFFFFFFFFULL));
+    return String(suffix);
+}
+}
+
 ConfigManager::ConfigManager()
 {
     setDefaults();
@@ -19,13 +30,48 @@ void ConfigManager::setDefaults()
 {
     config.mqtt_server = "113.161.220.166";
     config.mqtt_port = 1883;
-    config.device_id = "1";
-    config.serial_number = "SN001";
+    config.device_id = "";
+    config.serial_number = "";
     config.reading_interval = 10000;
     config.wifi_ssid = "";
     config.wifi_password = "";
     config.mqtt_username = "mqtt";
     config.mqtt_password = "-------------";
+}
+
+String ConfigManager::buildDefaultDeviceId() const
+{
+    return getIdentitySuffix();
+}
+
+String ConfigManager::buildDefaultSerialNumber() const
+{
+    return getIdentitySuffix();
+}
+
+bool ConfigManager::shouldMigrateLegacyIdentity() const
+{
+    return config.device_id == "1" && config.serial_number == "SN001";
+}
+
+void ConfigManager::ensureIdentity()
+{
+    if (shouldMigrateLegacyIdentity())
+    {
+        config.device_id = buildDefaultDeviceId();
+        config.serial_number = buildDefaultSerialNumber();
+        return;
+    }
+
+    if (config.device_id.isEmpty())
+    {
+        config.device_id = buildDefaultDeviceId();
+    }
+
+    if (config.serial_number.isEmpty())
+    {
+        config.serial_number = buildDefaultSerialNumber();
+    }
 }
 
 bool ConfigManager::loadConfig()
@@ -37,7 +83,8 @@ bool ConfigManager::loadConfig()
 
     if (!LittleFS.exists(CONFIG_FILE))
     {
-        Serial.println("Config file not found, creating default config");
+        ensureIdentity();
+        Serial.println("Config file not found, creating default config with generated device identity");
         return saveConfig();
     }
 
@@ -55,7 +102,10 @@ bool ConfigManager::loadConfig()
     if (error)
     {
         Serial.printf("Failed to parse config file: %s\n", error.c_str());
-        return false;
+        setDefaults();
+        ensureIdentity();
+        Serial.println("Recreating config with defaults while preserving generated identity");
+        return saveConfig();
     }
 
     // Load config từ JSON, dùng toán tử | để fallback mặc định
@@ -68,6 +118,15 @@ bool ConfigManager::loadConfig()
     config.wifi_password = doc["wifi_password"] | config.wifi_password;
     config.mqtt_username = doc["mqtt_username"] | config.mqtt_username;
     config.mqtt_password = doc["mqtt_password"] | config.mqtt_password;
+
+    const bool shouldRewriteIdentity = shouldMigrateLegacyIdentity() || config.device_id.isEmpty() || config.serial_number.isEmpty();
+    ensureIdentity();
+
+    if (shouldRewriteIdentity)
+    {
+        Serial.println("Persisting generated device identity to config");
+        saveConfig();
+    }
 
     Serial.println("Config loaded successfully");
     printConfig();
@@ -190,6 +249,11 @@ void ConfigManager::printConfig() const
 
 bool ConfigManager::resetToDefaults()
 {
+    const String preservedDeviceId = config.device_id;
+    const String preservedSerialNumber = config.serial_number;
     setDefaults();
+    config.device_id = preservedDeviceId;
+    config.serial_number = preservedSerialNumber;
+    ensureIdentity();
     return saveConfig();
 }

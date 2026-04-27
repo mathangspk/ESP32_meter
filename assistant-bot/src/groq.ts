@@ -78,7 +78,7 @@ function extractJsonObject(text: string): string {
 
 function fallbackParseAnalyticsIntent(question: string): AnalyticsIntent {
   const text = question.toLowerCase();
-  const identifierMatch = question.match(/\b([A-Za-z]{2}\d{3,}|SN\d+)\b/i);
+  const identifierMatch = question.match(/\b([A-Fa-f0-9]{8,}|[A-Za-z]{2}\d{3,}|SN\d+)\b/);
   const identifier = identifierMatch?.[1];
 
   if ((text.includes("hôm nay") || text.includes("today")) && (text.includes("kwh") || text.includes("kw điện") || text.includes("dùng bao nhiêu") || text.includes("tiêu thụ"))) {
@@ -149,6 +149,15 @@ export async function parseAnalyticsIntent(question: string): Promise<AnalyticsI
 
 function fallbackParseInventoryIntent(question: string): InventoryIntent {
   const text = question.toLowerCase();
+  const asksSpecificDeviceDetail =
+    text.includes("thông tin thiết bị") ||
+    text.includes("thong tin thiet bi") ||
+    text.includes("thông tin device") ||
+    text.includes("thong tin device") ||
+    text.includes("xem thiết bị") ||
+    text.includes("xem thiet bi") ||
+    text.startsWith("xem ") ||
+    text.startsWith("toi muon xem ");
   const asksMeasurement =
     text.includes("giá trị") ||
     text.includes("gia tri") ||
@@ -176,7 +185,7 @@ function fallbackParseInventoryIntent(question: string): InventoryIntent {
   const asksManagedScope =
     text.includes("quản lý") || text.includes("quan ly") || text.includes("my devices") || text.includes("managed devices");
 
-  if (asksMeasurement) {
+  if (asksMeasurement || asksSpecificDeviceDetail) {
     return { intent: "unknown", confidence: 0 };
   }
 

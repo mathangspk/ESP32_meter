@@ -389,3 +389,31 @@ Result:
   outcome: assistant-bot now accepts natural-language sensitive device actions and production bot was redeployed cleanly on VPS
   notes: next real-world verification should be live Telegram messages that confirm remove/reboot/factory-reset prompts appear as expected
 ```
+
+## 2026-04-27 Firmware Identity Persistence
+
+```text
+Date: 2026-04-27
+Task: Stop firmware resets from collapsing device identity back to shared defaults like SN001/device 1
+BMAD path:
+  Brief: OTA should keep device identity, and factory reset should clear network settings without destroying unique serial/device ID
+  Mapping: inspect ConfigManager defaults, load/save flow, DataSender defaults, and factory reset path
+  Architecture: generate fallback identity from chip MAC only when config lacks identity, preserve identity fields across resetToDefaults
+  Delivery: patch ConfigManager and DataSender, then rebuild firmware locally
+  Review: verify firmware compiles cleanly and confirm identity reset semantics in code
+Model usage:
+  cheap_steps: 1
+  build_steps: 1
+  deep_steps: 1
+  escalations: 0
+Execution:
+  files_changed: 4
+  verify_commands: pio run
+  verify_passed: yes
+  rework_loops: 0
+Handoff:
+  handoff_updated: yes
+Result:
+  outcome: new devices without config get MAC-derived fallback device_id and MAC-derived serial_number, and factory reset no longer overwrites saved identity
+  notes: existing devices already saved as SN001 are intentionally not auto-migrated; they should be reassigned explicitly if needed
+```

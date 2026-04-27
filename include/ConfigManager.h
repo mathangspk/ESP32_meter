@@ -50,6 +50,10 @@ private:
 
     static constexpr const char *CONFIG_FILE = "/config.json";
 
+    String buildDefaultDeviceId() const;
+    String buildDefaultSerialNumber() const;
+    bool shouldMigrateLegacyIdentity() const;
+    void ensureIdentity();
     void setDefaults();
 };
 

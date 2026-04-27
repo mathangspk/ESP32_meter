@@ -186,8 +186,18 @@ function buildDeviceActionConfirmation(device: Awaited<ReturnType<typeof backend
     .join("\n");
 }
 
+function normalizeVietnameseText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .trim();
+}
+
 function normalizeIdentifier(value: string): string {
-  return value.trim().toLowerCase();
+  return normalizeVietnameseText(value);
 }
 
 async function getAccessibleDevices(user: { defaultTenantId?: string }, memberships: Membership[]) {
@@ -273,8 +283,41 @@ async function handleAnalyticsQuestion(chatId: number, text: string, user: { use
 
 function parseDeviceDetailIdentifier(question: string): string | undefined {
   const trimmed = question.trim();
-  const directMatch = trimmed.match(/\b([A-Za-z]{2}\d{3,}|SN\d+|\d+)\b/i);
+  const directMatch = trimmed.match(/\b([A-Fa-f0-9]{8,}|[A-Za-z]{2}\d{3,}|SN\d+|\d+)\b/);
   return directMatch?.[1];
+}
+
+function parseDeviceDetailReference(question: string): string | undefined {
+  const explicitIdentifier = parseDeviceDetailIdentifier(question);
+  if (explicitIdentifier) {
+    return explicitIdentifier;
+  }
+
+  const text = normalizeVietnameseText(question);
+  const patterns = [
+    /^(?:thong tin thiet bi|thong tin device|device info|device detail|xem thiet bi|xem device)\s+(.+)$/,
+    /^(?:toi muon xem|xem)\s+(.+)$/,
+    /^(?:serial cua|firmware cua|phien ban hien tai cua)\s+(.+)$/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const candidate = match?.[1]?.trim();
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+function looksLikeFirmwareVersionQuestion(question: string): boolean {
+  const text = normalizeVietnameseText(question);
+  return (
+    text.includes("phien ban") ||
+    text.includes("firmware") ||
+    text.includes("version")
+  );
 }
 
 function parseNaturalLanguageDeviceAction(question: string):
@@ -283,20 +326,22 @@ function parseNaturalLanguageDeviceAction(question: string):
       identifier?: string;
     }
   | undefined {
-  const trimmed = question.trim();
-  const text = trimmed.toLowerCase();
+  const text = normalizeVietnameseText(question);
 
   const patterns: Array<{
     action: "remove" | "reboot" | "factory_reset";
     match: RegExp;
   }> = [
-    { action: "factory_reset", match: /^(?:factory\s*reset|reset\s+factory|khoi\s+phuc\s+cai\s+dat\s+goc|xoa\s+cai\s+dat\s+goc)\s+(?:device\s+|thiet\s+bi\s+)?(.+)$/i },
-    { action: "remove", match: /^(?:remove|xoa|go\s+bo)\s+(?:device\s+|thiet\s+bi\s+)?(.+)$/i },
-    { action: "reboot", match: /^(?:reboot|restart|khoi\s+dong\s+lai)\s+(?:device\s+|thiet\s+bi\s+)?(.+)$/i },
+    {
+      action: "factory_reset",
+      match: /^(?:factory\s*reset|reset\s+factory|khoi\s+phuc\s+cai\s+dat\s+goc|xoa\s+cai\s+dat\s+goc)\s+(?:device\s+|thiet\s+bi\s+)?(.+)$/,
+    },
+    { action: "remove", match: /^(?:remove|xoa|go\s+bo)\s+(?:device\s+|thiet\s+bi\s+)?(.+)$/ },
+    { action: "reboot", match: /^(?:reboot|restart|khoi\s+dong\s+lai)\s+(?:device\s+|thiet\s+bi\s+)?(.+)$/ },
   ];
 
   for (const pattern of patterns) {
-    const match = trimmed.match(pattern.match);
+    const match = text.match(pattern.match);
     if (!match) {
       continue;
     }
@@ -318,16 +363,16 @@ function parseNaturalLanguageDeviceAction(question: string):
 }
 
 function looksLikeDeviceDetailQuestion(question: string): boolean {
-  const text = question.toLowerCase();
+  const text = normalizeVietnameseText(question);
   return (
-    text.includes("chi tiết") ||
     text.includes("chi tiet") ||
-    text.includes("thông tin thiết bị") ||
+    text.includes("thong tin device") ||
+    text.includes("chi tiet") ||
     text.includes("thong tin thiet bi") ||
-    text.includes("thông tin của") ||
     text.includes("thong tin cua") ||
-    text.includes("xem thiết bị") ||
     text.includes("xem thiet bi") ||
+    text.startsWith("xem ") ||
+    text.startsWith("toi muon xem ") ||
     text.includes("device info") ||
     text.includes("device detail")
   );
@@ -338,7 +383,7 @@ async function handleDeviceDetailQuestion(chatId: number, text: string, user: { 
     return false;
   }
 
-  const identifier = parseDeviceDetailIdentifier(text);
+  const identifier = parseDeviceDetailReference(text);
   const { devices, device } = await resolveAccessibleDevice(identifier, user, memberships);
   if (devices.length === 0) {
     await sendMessage(chatId, "Khong tim thay thiet bi nao trong pham vi ban co quyen xem.");
@@ -358,6 +403,59 @@ async function handleDeviceDetailQuestion(chatId: number, text: string, user: { 
   const details = await backendClient.getDeviceHealth(device.serialNumber);
   await sendMessage(chatId, formatSingleDevice(details));
   return true;
+}
+
+async function handleFirmwareVersionQuestion(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
+  if (!looksLikeFirmwareVersionQuestion(text)) {
+    return false;
+  }
+
+  const explicitIdentifier = parseDeviceDetailIdentifier(text);
+  const identifier = explicitIdentifier ?? text;
+  const { devices, device } = await resolveAccessibleDevice(identifier, user, memberships);
+  if (devices.length === 0) {
+    await sendMessage(chatId, "Khong tim thay thiet bi nao trong pham vi ban co quyen xem.");
+    return true;
+  }
+
+  if (!device) {
+    await sendMessage(
+      chatId,
+      explicitIdentifier
+        ? "Minh chua xac dinh duoc chinh xac thiet bi ban muon hoi firmware. Hay gui lai serial, device ID, hoac ten thiet bi dung hon."
+        : `Ban muon hoi firmware cua thiet bi nao? Hien co: ${devices.map((candidate) => candidate.displayName ?? candidate.serialNumber).join(", ")}`,
+    );
+    return true;
+  }
+
+  const details = await backendClient.getDeviceHealth(device.serialNumber);
+  const firmware = details.lastFirmwareVersion ?? details.state?.lastFirmwareVersion ?? "khong ro";
+  await sendMessage(chatId, `${details.displayName ?? details.serialNumber}: firmware hien tai la ${firmware}.`);
+  return true;
+}
+
+async function resolveCommandDeviceIdentifier(
+  rawIdentifier: string,
+  user: { userId: string; defaultTenantId?: string },
+  memberships: Membership[],
+  chatId: number,
+  intentLabel: string,
+): Promise<string | undefined> {
+  const { devices, device } = await resolveAccessibleDevice(rawIdentifier, user, memberships);
+  if (devices.length === 0) {
+    await sendMessage(chatId, "Khong tim thay thiet bi nao trong pham vi ban co quyen xem.");
+    return undefined;
+  }
+
+  if (!device) {
+    await sendMessage(
+      chatId,
+      `Minh chua xac dinh duoc chinh xac thiet bi ban muon ${intentLabel}. Hay gui lai serial, device ID, hoac ten thiet bi dung hon.`,
+    );
+    return undefined;
+  }
+
+  return device.serialNumber;
 }
 
 async function handleNaturalLanguageDeviceAction(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
@@ -494,6 +592,10 @@ async function handleDefaultTenantSelection(chatId: number, text: string): Promi
 async function handleClaimFlow(chatId: number, text: string): Promise<boolean> {
   const pendingState = await getPendingState(chatId);
   if (!pendingState) {
+    return false;
+  }
+
+  if (text.trim().startsWith("/")) {
     return false;
   }
 
@@ -732,6 +834,38 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
         return;
       }
 
+      const providedSerial = args.join(" ").trim();
+      if (providedSerial) {
+        try {
+          const sites = await backendClient.getSitesForTenant(user.defaultTenantId);
+          if (sites.length === 0) {
+            await sendMessage(chatId, "No active site is available in your default tenant. Please contact your tenant admin.");
+            return;
+          }
+
+          await setPendingState(chatId, {
+            kind: "awaiting_claim_site",
+            userId,
+            tenantId: user.defaultTenantId,
+            serialNumber: providedSerial,
+            sites,
+          });
+
+          await sendMessage(
+            chatId,
+            [
+              `Serial number received: ${providedSerial}`,
+              "Choose a site by sending its number or site ID:",
+              ...sites.map((site, index) => `${index + 1}. ${site.name} (${site.siteId})`),
+            ].join("\n"),
+          );
+          return;
+        } catch {
+          await sendMessage(chatId, "Could not continue the claim flow right now. Please try /add_device again.");
+          return;
+        }
+      }
+
       await setPendingState(chatId, {
         kind: "awaiting_claim_serial",
         userId,
@@ -832,7 +966,12 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
       }
 
       try {
-        const device = await backendClient.getDeviceHealth(identifier);
+        const resolvedIdentifier = await resolveCommandDeviceIdentifier(identifier, user, refreshedMemberships, chatId, "xem");
+        if (!resolvedIdentifier) {
+          return;
+        }
+
+        const device = await backendClient.getDeviceHealth(resolvedIdentifier);
         await sendMessage(chatId, formatSingleDevice(device));
       } catch {
         await sendMessage(chatId, "Device not found.");
@@ -844,7 +983,12 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
       const identifier = args.join(" ").trim();
       if (identifier) {
         try {
-          const policy = await backendClient.getFirmwarePolicy(identifier);
+          const resolvedIdentifier = await resolveCommandDeviceIdentifier(identifier, user, refreshedMemberships, chatId, "xem firmware");
+          if (!resolvedIdentifier) {
+            return;
+          }
+
+          const policy = await backendClient.getFirmwarePolicy(resolvedIdentifier);
           await sendMessage(chatId, formatFirmwarePolicy(policy));
         } catch {
           await sendMessage(chatId, "Device not found.");
@@ -865,7 +1009,7 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
     case "/remove_device":
     case "/reboot_device":
     case "/factory_reset": {
-      const identifier = args[0]?.trim();
+      const identifier = args.join(" ").trim();
       if (!identifier) {
         await sendMessage(chatId, `Usage: ${command} <serial_number_or_device_id> [reason]`);
         return;
@@ -873,18 +1017,23 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
 
       const action = command === "/remove_device" ? "remove" : command === "/reboot_device" ? "reboot" : "factory_reset";
       try {
-        const allowed = await canManageDevice(identifier, user.defaultTenantId, refreshedMemberships);
+        const resolvedIdentifier = await resolveCommandDeviceIdentifier(identifier, user, refreshedMemberships, chatId, getActionLabel(action));
+        if (!resolvedIdentifier) {
+          return;
+        }
+
+        const allowed = await canManageDevice(resolvedIdentifier, user.defaultTenantId, refreshedMemberships);
         if (!allowed) {
           await sendMessage(chatId, "You do not have permission to manage this device.");
           return;
         }
 
-        const device = await backendClient.getDeviceHealth(identifier);
-        const reason = args.slice(1).join(" ").trim() || undefined;
+        const device = await backendClient.getDeviceHealth(resolvedIdentifier);
+        const reason = undefined;
         await setPendingState(chatId, {
           kind: "confirming_device_action",
           userId,
-          identifier,
+          identifier: resolvedIdentifier,
           action,
           reason,
         });
@@ -897,26 +1046,31 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
     }
 
     case "/ota_update": {
-      const identifier = args[0]?.trim();
-      const version = args[1]?.trim();
+      const version = args[args.length - 1]?.trim();
+      const identifier = args.slice(0, -1).join(" ").trim();
       if (!identifier || !version) {
         await sendMessage(chatId, "Usage: /ota_update <serial_number_or_device_id> <firmware_version>");
         return;
       }
 
       try {
-        const allowed = await canManageDevice(identifier, user.defaultTenantId, refreshedMemberships);
+        const resolvedIdentifier = await resolveCommandDeviceIdentifier(identifier, user, refreshedMemberships, chatId, "cap nhat OTA");
+        if (!resolvedIdentifier) {
+          return;
+        }
+
+        const allowed = await canManageDevice(resolvedIdentifier, user.defaultTenantId, refreshedMemberships);
         if (!allowed) {
           await sendMessage(chatId, "You do not have permission to update this device.");
           return;
         }
 
-        const device = await backendClient.getDeviceHealth(identifier);
-        const policy = await backendClient.getFirmwarePolicy(identifier);
+        const device = await backendClient.getDeviceHealth(resolvedIdentifier);
+        const policy = await backendClient.getFirmwarePolicy(resolvedIdentifier);
         await setPendingState(chatId, {
           kind: "confirming_ota",
           userId,
-          identifier,
+          identifier: resolvedIdentifier,
           version,
         });
 
@@ -945,6 +1099,10 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
 
 async function handleNaturalLanguage(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
   if (await handleNaturalLanguageDeviceAction(chatId, text, user, memberships)) {
+    return;
+  }
+
+  if (await handleFirmwareVersionQuestion(chatId, text, user, memberships)) {
     return;
   }
 

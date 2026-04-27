@@ -135,6 +135,9 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
   - remove / unclaim
   - reboot
   - factory reset
+- Firmware identity fallback no longer hardcodes shared defaults like `deviceId=1` and `serialNumber=SN001` on first boot.
+- Firmware now derives both fallback `device_id` and fallback `serial_number` directly from chip MAC when config storage has no saved identity.
+- Firmware `resetToDefaults()` now preserves `device_id` and `serial_number`, so OTA and factory reset no longer collapse devices back to the same shared identity.
 - A working SSH key path now exists for VPS access:
   - local alias: `vps-prod`
   - user: `tma_agi`
@@ -224,9 +227,9 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 
 ## Next Recommended Steps
 
-1. Run a longer stability check with `SN005` on firmware `1.0.1-release-candidate-19` and confirm telemetry stays healthy over time without serial attached.
-2. Decide whether to add firmware checksum enforcement on-device before broad release, since backend already stores SHA256 but firmware still does not verify it.
-3. Run live Telegram checks for both analytics/details and natural-language actions like `Remove device SN005`, `Factory reset SN005`, and `Reboot MainMeter`.
+1. Flash one test device with this identity-persistence patch and verify first boot generates both unique `device_id` and `serial_number` directly from MAC when no config exists.
+2. Verify `factory reset` preserves that generated or assigned identity while still clearing Wi-Fi settings.
+3. Decide whether serial numbers should stay MAC-derived by default or move to a manufacturing-time provisioning flow before scaling device count.
 
 ## Known Constraints
 
@@ -275,6 +278,7 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - OTA true Wi-Fi-loss path with reconnect and final `failed`: passed
 - Clean release-candidate OTA promotion to final device: passed
 - Assistant-bot natural-language sensitive-action milestone: passed
+- Firmware identity persistence milestone: passed in local build verification
 - Backend domain foundation and fleet visibility milestone: passed
 - Assistant-bot baseline milestone: passed
 - Firmware release policy milestone: passed
@@ -338,6 +342,7 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Evidence: local `assistant-bot` TypeScript `typecheck` and `build` both passed after adding natural-language device-action parsing
 - Evidence: VPS `assistant-bot` service rebuilt successfully from updated source and container restarted cleanly
 - Evidence: read-only post-deploy verification found `assistant-bot` up, `backend` healthy, and no startup/runtime errors in recent bot logs
+- Evidence: `pio run` passed after replacing hardcoded identity defaults with MAC-derived `device_id` and MAC-derived `serial_number`, while preserving identity across `resetToDefaults()`
 
 ## Suggested New Session Prompt
 

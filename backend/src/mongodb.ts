@@ -1472,6 +1472,8 @@ export class MongoService {
 
   private async upsertDeviceFromTelemetry(payload: TelemetryPayload): Promise<void> {
     const now = new Date();
+    await this.reconcileDeviceIdentityFromTelemetry(payload, now);
+
     const setFields: Partial<DeviceRecord> = {
       deviceId: payload.device_id,
       lastSeenAt: now,
@@ -1506,6 +1508,76 @@ export class MongoService {
       },
       { upsert: true },
     );
+  }
+
+  private async reconcileDeviceIdentityFromTelemetry(payload: TelemetryPayload, now: Date): Promise<void> {
+    if (!payload.mac_address) {
+      return;
+    }
+
+    const existingBySerial = await this.devices.findOne({ serialNumber: payload.serial_number });
+    if (existingBySerial) {
+      return;
+    }
+
+    const existingByMac = await this.devices.findOne({ macAddress: payload.mac_address });
+    if (!existingByMac || existingByMac.serialNumber === payload.serial_number) {
+      return;
+    }
+
+    const collision = await this.devices.findOne({
+      serialNumber: payload.serial_number,
+      macAddress: { $ne: payload.mac_address },
+    });
+    if (collision) {
+      return;
+    }
+
+    const previousSerialNumber = existingByMac.serialNumber;
+    const previousDeviceId = existingByMac.deviceId;
+
+    await this.devices.updateOne(
+      { serialNumber: previousSerialNumber },
+      {
+        $set: {
+          serialNumber: payload.serial_number,
+          deviceId: payload.device_id,
+          lastSeenAt: now,
+          lastFirmwareVersion: payload.firmware_version,
+          updatedAt: now,
+        },
+      },
+    );
+
+    await this.deviceStates.updateOne(
+      { deviceId: previousDeviceId },
+      {
+        $set: {
+          deviceId: payload.device_id,
+          serialNumber: payload.serial_number,
+          updatedAt: now,
+        },
+      },
+    );
+
+    await this.deviceAssignments.updateMany(
+      { serialNumber: previousSerialNumber, unassignedAt: { $exists: false } },
+      { $set: { serialNumber: payload.serial_number } },
+    );
+
+    await this.auditEvents.insertOne({
+      eventType: "device.identity.migrated",
+      actorUserId: "system",
+      tenantId: existingByMac.tenantId,
+      deviceSerialNumber: payload.serial_number,
+      deviceId: payload.device_id,
+      payload: {
+        previousSerialNumber,
+        previousDeviceId,
+        macAddress: payload.mac_address,
+      },
+      createdAt: now,
+    });
   }
 
   private async getOnlineUnclaimedDevicesCount(onlineCutoff: Date): Promise<number> {
@@ -1659,6 +1731,7 @@ export class MongoService {
     await this.telemetry.createIndex({ deviceId: 1, timestamp: -1 });
     await this.devices.createIndex({ serialNumber: 1 }, { unique: true });
     await this.devices.createIndex({ deviceId: 1 });
+    await this.devices.createIndex({ macAddress: 1 });
     await this.devices.createIndex({ claimStatus: 1, updatedAt: -1 });
     await this.devices.createIndex({ lifecycleStatus: 1, updatedAt: -1 });
     await this.deviceStates.createIndex({ deviceId: 1 }, { unique: true });
