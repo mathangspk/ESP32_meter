@@ -60,6 +60,13 @@ ssh vps-prod "curl -sS http://127.0.0.1:3000/healthz"
 ssh vps-prod "curl -sS http://127.0.0.1:3000/devices/SN005/health"
 ```
 
+Scripted equivalents:
+
+```bash
+scripts/deploy-vps.sh --env-file /path/to/.env.prod --passwd-file /path/to/passwd.user
+scripts/verify-vps.sh --device SN005
+```
+
 ## Current Verified State
 
 - VPS backend health returns `status=ok`

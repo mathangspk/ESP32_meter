@@ -54,6 +54,13 @@ docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
 
+For current VPS host automation, prefer:
+
+```bash
+scripts/deploy-vps.sh --env-file /path/to/.env.prod --passwd-file /path/to/passwd.user
+scripts/verify-vps.sh --device SN005
+```
+
 ## Upgrade
 
 1. Push code to `main`.
