@@ -123,6 +123,7 @@ function formatDeviceList(prefix: string, devices: Awaited<ReturnType<typeof bac
 function formatSingleDevice(device: Awaited<ReturnType<typeof backendClient.getDeviceHealth>>): string {
   const lastSeen = device.state?.lastSeenAt ?? "unknown";
   const voltage = device.state?.lastVoltage ?? 0;
+  const current = device.state?.lastCurrent ?? 0;
   const power = device.state?.lastPower ?? 0;
   return [
     `Device: ${device.displayName ?? device.serialNumber}`,
@@ -133,6 +134,7 @@ function formatSingleDevice(device: Awaited<ReturnType<typeof backendClient.getD
     `Firmware: ${device.lastFirmwareVersion ?? device.state?.lastFirmwareVersion ?? "unknown"}`,
     `Last seen: ${lastSeen}`,
     `Voltage: ${voltage.toFixed(1)} V`,
+    `Current: ${current.toFixed(3)} A`,
     `Power: ${power.toFixed(1)} W`,
   ].join("\n");
 }
@@ -252,6 +254,55 @@ async function handleAnalyticsQuestion(chatId: number, text: string, user: { use
   const summary = await backendClient.getDeviceAnalyticsSummary(device.serialNumber);
   const answer = await renderAnalyticsAnswer(text, intent.intent, summary);
   await sendMessage(chatId, answer ?? formatAnalyticsFallback(summary));
+  return true;
+}
+
+function parseDeviceDetailIdentifier(question: string): string | undefined {
+  const trimmed = question.trim();
+  const directMatch = trimmed.match(/\b([A-Za-z]{2}\d{3,}|SN\d+|\d+)\b/i);
+  return directMatch?.[1];
+}
+
+function looksLikeDeviceDetailQuestion(question: string): boolean {
+  const text = question.toLowerCase();
+  return (
+    text.includes("chi tiết") ||
+    text.includes("chi tiet") ||
+    text.includes("thông tin thiết bị") ||
+    text.includes("thong tin thiet bi") ||
+    text.includes("thông tin của") ||
+    text.includes("thong tin cua") ||
+    text.includes("xem thiết bị") ||
+    text.includes("xem thiet bi") ||
+    text.includes("device info") ||
+    text.includes("device detail")
+  );
+}
+
+async function handleDeviceDetailQuestion(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
+  if (!looksLikeDeviceDetailQuestion(text)) {
+    return false;
+  }
+
+  const identifier = parseDeviceDetailIdentifier(text);
+  const { devices, device } = await resolveAccessibleDevice(identifier, user, memberships);
+  if (devices.length === 0) {
+    await sendMessage(chatId, "Khong tim thay thiet bi nao trong pham vi ban co quyen xem.");
+    return true;
+  }
+
+  if (!device) {
+    await sendMessage(
+      chatId,
+      identifier
+        ? "Minh chua xac dinh duoc chinh xac thiet bi ban muon xem. Hay gui lai serial, device ID, hoac ten thiet bi dung hon."
+        : `Ban muon xem thiet bi nao? Hien co: ${devices.map((candidate) => candidate.displayName ?? candidate.serialNumber).join(", ")}`,
+    );
+    return true;
+  }
+
+  const details = await backendClient.getDeviceHealth(device.serialNumber);
+  await sendMessage(chatId, formatSingleDevice(details));
   return true;
 }
 
@@ -813,11 +864,15 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
 }
 
 async function handleNaturalLanguage(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
-  if (await handleInventoryQuestion(chatId, text, user, memberships)) {
+  if (await handleDeviceDetailQuestion(chatId, text, user, memberships)) {
     return;
   }
 
   if (await handleAnalyticsQuestion(chatId, text, user, memberships)) {
+    return;
+  }
+
+  if (await handleInventoryQuestion(chatId, text, user, memberships)) {
     return;
   }
 

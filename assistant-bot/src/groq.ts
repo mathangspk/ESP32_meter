@@ -2,7 +2,7 @@ import { z } from "zod";
 import { config } from "./config";
 
 const analyticsIntentSchema = z.object({
-  intent: z.enum(["get_today_energy", "get_peak_hour", "get_current_voltage", "get_current_power", "get_current_summary", "unknown"]),
+  intent: z.enum(["get_today_energy", "get_peak_hour", "get_current_voltage", "get_current_current", "get_current_power", "get_current_summary", "unknown"]),
   identifier: z.string().optional(),
   confidence: z.number().min(0).max(1).optional(),
 });
@@ -20,6 +20,7 @@ type AnalyticsSummary = {
   serialNumber: string;
   siteTimezone: string;
   currentVoltage?: number;
+  currentCurrent?: number;
   currentPower?: number;
   currentSeenAt?: string;
   todayEnergyKwh?: number;
@@ -88,8 +89,23 @@ function fallbackParseAnalyticsIntent(question: string): AnalyticsIntent {
     return { intent: "get_peak_hour", identifier, confidence: 0.5 };
   }
 
+  if (
+    identifier &&
+    (text.includes("giá trị hiện tại") ||
+      text.includes("gia tri hien tai") ||
+      text.includes("hiện tại của") ||
+      text.includes("hien tai cua") ||
+      text.includes("current value"))
+  ) {
+    return { intent: "get_current_summary", identifier, confidence: 0.5 };
+  }
+
   if (text.includes("điện áp") && (text.includes("công suất") || text.includes("bao nhiêu"))) {
     return { intent: "get_current_summary", identifier, confidence: 0.5 };
+  }
+
+  if (text.includes("dòng điện") || text.includes("dong dien") || text.includes("ampe") || text.includes("ampere") || text.includes("current")) {
+    return { intent: "get_current_current", identifier, confidence: 0.5 };
   }
 
   if (text.includes("điện áp")) {
@@ -113,7 +129,7 @@ export async function parseAnalyticsIntent(question: string): Promise<AnalyticsI
       {
         role: "system",
         content:
-          "You classify natural-language analytics questions for an IoT power meter assistant. Return only one JSON object with keys: intent, identifier, confidence. Valid intents are get_today_energy, get_peak_hour, get_current_voltage, get_current_power, get_current_summary, unknown. Only set identifier when the user clearly names a serial number, device ID, or display name. Do not invent data.",
+          "You classify natural-language analytics questions for an IoT power meter assistant. Return only one JSON object with keys: intent, identifier, confidence. Valid intents are get_today_energy, get_peak_hour, get_current_voltage, get_current_current, get_current_power, get_current_summary, unknown. Use get_current_summary for generic requests like current value or current readings. Only set identifier when the user clearly names a serial number, device ID, or display name. Do not invent data.",
       },
       {
         role: "user",
@@ -133,6 +149,20 @@ export async function parseAnalyticsIntent(question: string): Promise<AnalyticsI
 
 function fallbackParseInventoryIntent(question: string): InventoryIntent {
   const text = question.toLowerCase();
+  const asksMeasurement =
+    text.includes("giá trị") ||
+    text.includes("gia tri") ||
+    text.includes("hiện tại") ||
+    text.includes("hien tai") ||
+    text.includes("điện áp") ||
+    text.includes("dien ap") ||
+    text.includes("công suất") ||
+    text.includes("cong suat") ||
+    text.includes("dòng") ||
+    text.includes("dong") ||
+    text.includes("current") ||
+    text.includes("power") ||
+    text.includes("voltage");
   const asksCount = text.includes("bao nhiêu thiết bị") || text.includes("bao nhieu thiet bi") || text.includes("how many devices");
   const asksNames =
     text.includes("tên gì") ||
@@ -145,6 +175,10 @@ function fallbackParseInventoryIntent(question: string): InventoryIntent {
     text.includes("device names");
   const asksManagedScope =
     text.includes("quản lý") || text.includes("quan ly") || text.includes("my devices") || text.includes("managed devices");
+
+  if (asksMeasurement) {
+    return { intent: "unknown", confidence: 0 };
+  }
 
   if ((asksCount && asksNames) || (asksManagedScope && asksNames)) {
     return { intent: "get_managed_device_summary", confidence: 0.5 };
@@ -215,10 +249,12 @@ function buildAnalyticsFacts(intent: AnalyticsIntent["intent"], summary: Analyti
       return `${label}: hôm nay khung giờ có công suất trung bình cao nhất là ${formatTimeRange(summary.peakHourStart, summary.peakHourEnd, summary.siteTimezone)} theo múi giờ ${summary.siteTimezone}, với công suất trung bình ${summary.peakHourAveragePower.toFixed(1)} W.`;
     case "get_current_voltage":
       return `${label}: điện áp hiện tại là ${summary.currentVoltage?.toFixed(1) ?? "không rõ"} V.`;
+    case "get_current_current":
+      return `${label}: dòng điện hiện tại là ${summary.currentCurrent?.toFixed(3) ?? "không rõ"} A.`;
     case "get_current_power":
       return `${label}: công suất hiện tại là ${summary.currentPower?.toFixed(1) ?? "không rõ"} W.`;
     case "get_current_summary":
-      return `${label}: điện áp hiện tại là ${summary.currentVoltage?.toFixed(1) ?? "không rõ"} V và công suất hiện tại là ${summary.currentPower?.toFixed(1) ?? "không rõ"} W.`;
+      return `${label}: điện áp hiện tại là ${summary.currentVoltage?.toFixed(1) ?? "không rõ"} V, dòng điện hiện tại là ${summary.currentCurrent?.toFixed(3) ?? "không rõ"} A và công suất hiện tại là ${summary.currentPower?.toFixed(1) ?? "không rõ"} W.`;
     default:
       return `${label}: ${summary.messages.join(" ")}`.trim();
   }

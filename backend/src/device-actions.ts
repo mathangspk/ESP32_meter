@@ -46,7 +46,7 @@ async function publishDeviceCommand(identifier: string, action: Exclude<DeviceAc
   });
 
   try {
-    await mqttService.publish(commandTopic, JSON.stringify(payload));
+    await mqttService.publish(commandTopic, JSON.stringify(payload), { qos: 1, retain: false });
     await mongoService.markDeviceCommandPublished(commandId);
     logger.info({ commandId, action, deviceId: device.deviceId, commandTopic }, "Published device command");
     return { ...command, status: "published" as const };

@@ -70,6 +70,7 @@ const deviceStateSchema = z
   .object({
     lastSeenAt: z.string().optional(),
     lastVoltage: z.number().optional(),
+    lastCurrent: z.number().optional(),
     lastPower: z.number().optional(),
     isOffline: z.boolean().optional(),
     lastFirmwareVersion: z.string().optional(),
@@ -116,6 +117,7 @@ const deviceAnalyticsSummarySchema = z.object({
   dayStart: z.string(),
   dayEnd: z.string(),
   currentVoltage: z.number().optional(),
+  currentCurrent: z.number().optional(),
   currentPower: z.number().optional(),
   currentSeenAt: z.string().optional(),
   todayEnergyKwh: z.number().optional(),

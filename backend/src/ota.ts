@@ -53,7 +53,7 @@ export async function createOtaJob(input: OtaCommandRequest) {
   });
 
   try {
-    await mqttService.publish(commandTopic, JSON.stringify(commandPayload));
+    await mqttService.publish(commandTopic, JSON.stringify(commandPayload), { qos: 1, retain: false });
     await mongoService.markOtaJobPublished(jobId);
     logger.info({ jobId, deviceId: input.device_id, commandTopic }, "Published OTA command");
   } catch (error) {

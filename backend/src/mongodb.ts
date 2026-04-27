@@ -161,6 +161,7 @@ export type DeviceStateRecord = {
   lastOfflineAlertAt?: Date;
   lastRecoveredAlertAt?: Date;
   lastVoltage: number;
+  lastCurrent: number;
   lastPower: number;
   lastFirmwareVersion?: string;
   lastOtaJobId?: string;
@@ -280,6 +281,7 @@ export type DeviceAnalyticsSummary = {
   dayStart: Date;
   dayEnd: Date;
   currentVoltage?: number;
+  currentCurrent?: number;
   currentPower?: number;
   currentSeenAt?: Date;
   todayEnergyKwh?: number;
@@ -456,6 +458,7 @@ export class MongoService {
           lastSeenAt: now,
           lastTelemetryAt: new Date(payload.timestamp),
           lastVoltage: payload.voltage,
+          lastCurrent: payload.current,
           lastPower: payload.power,
           lastFirmwareVersion: payload.firmware_version,
           updatedAt: now,
@@ -595,6 +598,7 @@ export class MongoService {
           lastSeenAt: now,
           lastTelemetryAt: statusTimestamp,
           lastVoltage: 0,
+          lastCurrent: 0,
           lastPower: 0,
         },
       },
@@ -857,6 +861,7 @@ export class MongoService {
       dayStart,
       dayEnd,
       currentVoltage: device.state?.lastVoltage,
+      currentCurrent: device.state?.lastCurrent,
       currentPower: device.state?.lastPower,
       currentSeenAt: device.state?.lastSeenAt,
       todayEnergyKwh,

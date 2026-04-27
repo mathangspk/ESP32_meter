@@ -1,4 +1,4 @@
-import mqtt, { MqttClient } from "mqtt";
+import mqtt, { IClientPublishOptions, MqttClient } from "mqtt";
 import { config } from "./config";
 import { handleTelemetryAlertTransitions } from "./alerts";
 import { logger } from "./logger";
@@ -62,13 +62,13 @@ export class MqttService {
     });
   }
 
-  async publish(topic: string, payload: string): Promise<void> {
+  async publish(topic: string, payload: string, options?: IClientPublishOptions): Promise<void> {
     if (!this.client || !this.client.connected) {
       throw new Error("MQTT broker is not connected");
     }
 
     await new Promise<void>((resolve, reject) => {
-      this.client.publish(topic, payload, (error) => {
+      this.client.publish(topic, payload, options ?? {}, (error) => {
         if (error) {
           reject(error);
           return;
