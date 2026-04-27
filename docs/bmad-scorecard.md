@@ -361,3 +361,31 @@ Result:
   outcome: future "deploy to VPS" work now has repo memory for what must match, what may differ, and what to verify
   notes: this should cut repeated reasoning time before each deploy and make local-first promotion more consistent
 ```
+
+## 2026-04-27 Natural-Language Device Actions
+
+```text
+Date: 2026-04-27
+Task: Let assistant-bot understand natural-language remove/reboot/factory-reset requests instead of requiring slash commands
+BMAD path:
+  Brief: users should be able to say things like "Remove device SN005" and still hit exact existing confirmation flow
+  Mapping: inspect assistant-bot command routing, natural-language handlers, and current VPS deploy path
+  Architecture: add small parser in assistant-bot, reuse existing device resolution and confirmation logic, avoid backend API changes
+  Delivery: patch assistant-bot natural-language routing, build locally, deploy updated bot source to VPS, rebuild service
+  Review: verify TypeScript checks pass and confirm VPS bot container restarts without runtime errors
+Model usage:
+  cheap_steps: 1
+  build_steps: 2
+  deep_steps: 1
+  escalations: 0
+Execution:
+  files_changed: 3
+  verify_commands: npm run typecheck (assistant-bot); npm run build (assistant-bot); docker-compose -f docker-compose.deploy.yml up -d --build assistant-bot; docker-compose -f docker-compose.deploy.yml ps assistant-bot
+  verify_passed: yes
+  rework_loops: 1
+Handoff:
+  handoff_updated: yes
+Result:
+  outcome: assistant-bot now accepts natural-language sensitive device actions and production bot was redeployed cleanly on VPS
+  notes: next real-world verification should be live Telegram messages that confirm remove/reboot/factory-reset prompts appear as expected
+```

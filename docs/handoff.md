@@ -131,6 +131,10 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
   - what those devices are called
   - combined count plus device-name questions
 - `assistant-bot` now resolves devices from accessible tenant or admin scope before asking Groq to phrase an analytics answer naturally in Vietnamese
+- `assistant-bot` now also parses natural-language sensitive device actions and routes them into the existing confirmation flow for:
+  - remove / unclaim
+  - reboot
+  - factory reset
 - A working SSH key path now exists for VPS access:
   - local alias: `vps-prod`
   - user: `tma_agi`
@@ -222,7 +226,7 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 
 1. Run a longer stability check with `SN005` on firmware `1.0.1-release-candidate-19` and confirm telemetry stays healthy over time without serial attached.
 2. Decide whether to add firmware checksum enforcement on-device before broad release, since backend already stores SHA256 but firmware still does not verify it.
-3. Run live Telegram checks for questions like `Dòng là bao nhiêu bạn`, `Giá trị hiện tại của SN005`, and `Tôi muốn xem chi tiết thông tin thiết bị`.
+3. Run live Telegram checks for both analytics/details and natural-language actions like `Remove device SN005`, `Factory reset SN005`, and `Reboot MainMeter`.
 
 ## Known Constraints
 
@@ -270,6 +274,7 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - OTA server-drop failure path with final `failed` status: passed after hardening
 - OTA true Wi-Fi-loss path with reconnect and final `failed`: passed
 - Clean release-candidate OTA promotion to final device: passed
+- Assistant-bot natural-language sensitive-action milestone: passed
 - Backend domain foundation and fleet visibility milestone: passed
 - Assistant-bot baseline milestone: passed
 - Firmware release policy milestone: passed
@@ -330,6 +335,9 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Evidence: true Wi-Fi-loss test on debug base `1.0.1-ota-wifi-drop-base-17` accepted `wifi_drop`, lost Wi-Fi and MQTT during OTA, reconnected successfully, and ended with `status":"failed","message":"OTA timed out while downloading"` for job `dcdcd8d5-edb1-47f3-ab18-6334ea484b55`
 - Evidence: clean release candidate `firmware-v1.0.1-release-candidate-19` was published to GitHub Releases and registered in production with SHA256 `d4edcd5e0d1166ddd98ab1e7fc16c6960aea37a46d4619e8af3e36f007a52531`
 - Evidence: policy-gated OTA job `3b9a0613-1d36-4073-a22b-4466633c5f6a` reached `status=success` and `GET /devices/SN005/health` now reports `lastFirmwareVersion=1.0.1-release-candidate-19`, `lastOtaStatus=success`, and continuing telemetry
+- Evidence: local `assistant-bot` TypeScript `typecheck` and `build` both passed after adding natural-language device-action parsing
+- Evidence: VPS `assistant-bot` service rebuilt successfully from updated source and container restarted cleanly
+- Evidence: read-only post-deploy verification found `assistant-bot` up, `backend` healthy, and no startup/runtime errors in recent bot logs
 
 ## Suggested New Session Prompt
 

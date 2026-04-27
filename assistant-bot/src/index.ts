@@ -172,6 +172,20 @@ function getActionLabel(action: "remove" | "reboot" | "factory_reset"): string {
   return action;
 }
 
+function buildDeviceActionConfirmation(device: Awaited<ReturnType<typeof backendClient.getDeviceHealth>>, action: "remove" | "reboot" | "factory_reset") {
+  return [
+    `Confirm ${getActionLabel(action)}:`,
+    `Device: ${device.displayName ?? device.serialNumber}`,
+    `Serial: ${device.serialNumber}`,
+    `Device ID: ${device.deviceId}`,
+    action === "remove" ? "This will unclaim the device immediately and keep history." : "This will publish a remote command to the device over MQTT.",
+    action === "factory_reset" ? "Factory reset will wipe app config and Wi-Fi settings, then reboot into AP/bootstrap mode." : undefined,
+    "Send CONFIRM to continue, or CANCEL to stop.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function normalizeIdentifier(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -263,6 +277,46 @@ function parseDeviceDetailIdentifier(question: string): string | undefined {
   return directMatch?.[1];
 }
 
+function parseNaturalLanguageDeviceAction(question: string):
+  | {
+      action: "remove" | "reboot" | "factory_reset";
+      identifier?: string;
+    }
+  | undefined {
+  const trimmed = question.trim();
+  const text = trimmed.toLowerCase();
+
+  const patterns: Array<{
+    action: "remove" | "reboot" | "factory_reset";
+    match: RegExp;
+  }> = [
+    { action: "factory_reset", match: /^(?:factory\s*reset|reset\s+factory|khoi\s+phuc\s+cai\s+dat\s+goc|xoa\s+cai\s+dat\s+goc)\s+(?:device\s+|thiet\s+bi\s+)?(.+)$/i },
+    { action: "remove", match: /^(?:remove|xoa|go\s+bo)\s+(?:device\s+|thiet\s+bi\s+)?(.+)$/i },
+    { action: "reboot", match: /^(?:reboot|restart|khoi\s+dong\s+lai)\s+(?:device\s+|thiet\s+bi\s+)?(.+)$/i },
+  ];
+
+  for (const pattern of patterns) {
+    const match = trimmed.match(pattern.match);
+    if (!match) {
+      continue;
+    }
+
+    const identifier = match[1]?.trim();
+    return {
+      action: pattern.action,
+      identifier: identifier && identifier.length > 0 ? identifier : undefined,
+    };
+  }
+
+  if (text === "factory reset" || text === "remove device" || text === "reboot device") {
+    return {
+      action: text === "factory reset" ? "factory_reset" : text === "reboot device" ? "reboot" : "remove",
+    };
+  }
+
+  return undefined;
+}
+
 function looksLikeDeviceDetailQuestion(question: string): boolean {
   const text = question.toLowerCase();
   return (
@@ -303,6 +357,45 @@ async function handleDeviceDetailQuestion(chatId: number, text: string, user: { 
 
   const details = await backendClient.getDeviceHealth(device.serialNumber);
   await sendMessage(chatId, formatSingleDevice(details));
+  return true;
+}
+
+async function handleNaturalLanguageDeviceAction(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
+  const parsed = parseNaturalLanguageDeviceAction(text);
+  if (!parsed) {
+    return false;
+  }
+
+  const { devices, device } = await resolveAccessibleDevice(parsed.identifier, user, memberships);
+  if (devices.length === 0) {
+    await sendMessage(chatId, "Khong tim thay thiet bi nao trong pham vi ban co quyen quan ly.");
+    return true;
+  }
+
+  if (!device) {
+    await sendMessage(
+      chatId,
+      parsed.identifier
+        ? `Minh chua xac dinh duoc chinh xac thiet bi ban muon ${getActionLabel(parsed.action)}. Hay gui lai serial, device ID, hoac ten thiet bi dung hon.`
+        : `Ban muon ${getActionLabel(parsed.action)} thiet bi nao? Hien co: ${devices.map((candidate) => candidate.displayName ?? candidate.serialNumber).join(", ")}`,
+    );
+    return true;
+  }
+
+  const allowed = await canManageDevice(device.serialNumber, user.defaultTenantId, memberships);
+  if (!allowed) {
+    await sendMessage(chatId, "You do not have permission to manage this device.");
+    return true;
+  }
+
+  const details = await backendClient.getDeviceHealth(device.serialNumber);
+  await setPendingState(chatId, {
+    kind: "confirming_device_action",
+    userId: user.userId,
+    identifier: device.serialNumber,
+    action: parsed.action,
+  });
+  await sendMessage(chatId, buildDeviceActionConfirmation(details, parsed.action));
   return true;
 }
 
@@ -796,20 +889,7 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
           reason,
         });
 
-        await sendMessage(
-          chatId,
-          [
-            `Confirm ${getActionLabel(action)}:`,
-            `Device: ${device.displayName ?? device.serialNumber}`,
-            `Serial: ${device.serialNumber}`,
-            `Device ID: ${device.deviceId}`,
-            action === "remove" ? "This will unclaim the device immediately and keep history." : "This will publish a remote command to the device over MQTT.",
-            action === "factory_reset" ? "Factory reset will wipe app config and Wi-Fi settings, then reboot into AP/bootstrap mode." : undefined,
-            "Send CONFIRM to continue, or CANCEL to stop.",
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        );
+        await sendMessage(chatId, buildDeviceActionConfirmation(device, action));
       } catch {
         await sendMessage(chatId, "Device not found.");
       }
@@ -864,6 +944,10 @@ async function handleCommand(chatId: number, text: string, userId: string, membe
 }
 
 async function handleNaturalLanguage(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
+  if (await handleNaturalLanguageDeviceAction(chatId, text, user, memberships)) {
+    return;
+  }
+
   if (await handleDeviceDetailQuestion(chatId, text, user, memberships)) {
     return;
   }
