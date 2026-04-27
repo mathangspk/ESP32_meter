@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Review production OTA hardening after successful HTTP/HTTPS updates and explicit mid-transfer failure testing.
+Review release-candidate readiness after OTA hardening, Wi-Fi-loss testing, and clean RC promotion.
 
 ## Current BMAD Phase
 
@@ -220,8 +220,8 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 
 ## Next Recommended Steps
 
-1. Run a longer stability check with `SN005` on firmware `1.0.1-ota-hardening-16` and confirm telemetry stays healthy over time without serial attached.
-2. Test one true Wi-Fi-loss case if you want proof that deferred OTA status publish works after MQTT reconnect, not only for server-side drop/timeouts.
+1. Run a longer stability check with `SN005` on firmware `1.0.1-release-candidate-19` and confirm telemetry stays healthy over time without serial attached.
+2. Decide whether to add firmware checksum enforcement on-device before broad release, since backend already stores SHA256 but firmware still does not verify it.
 3. Run live Telegram checks for questions like `Dòng là bao nhiêu bạn`, `Giá trị hiện tại của SN005`, and `Tôi muốn xem chi tiết thông tin thiết bị`.
 
 ## Known Constraints
@@ -243,6 +243,7 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - Firmware policy can mislabel current device firmware as unsupported when that exact version is not present in the release catalog, even if OTA runtime itself is healthy
 - Mid-transfer server drop originally left OTA stuck in `downloading`; firmware now has a 45-second OTA watchdog that converts that hang into a final `failed` status while keeping the old firmware running
 - Deferred OTA status publish now queues status locally when MQTT is disconnected and flushes it after reconnect
+- Debug-only VPS firmware hosting is now kept as on-demand scripts and artifact directory; it is not exposed publicly unless explicitly started for a test
 
 ## Most Relevant Commands
 
@@ -267,6 +268,8 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Production OTA repeat pass without serial attached: passed
 - Production OTA over HTTPS GitHub Releases: passed
 - OTA server-drop failure path with final `failed` status: passed after hardening
+- OTA true Wi-Fi-loss path with reconnect and final `failed`: passed
+- Clean release-candidate OTA promotion to final device: passed
 - Backend domain foundation and fleet visibility milestone: passed
 - Assistant-bot baseline milestone: passed
 - Firmware release policy milestone: passed
@@ -324,6 +327,9 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Evidence: after flashing `1.0.1-ota-hardening-16`, serial trace showed `OTA timed out, stopping stuck OTA task` followed by `status":"failed","message":"OTA timed out while downloading"` for job `2c1472cb-0c30-472e-8498-e4fd7a2e065e`
 - Evidence: `GET /ota/jobs/2c1472cb-0c30-472e-8498-e4fd7a2e065e` now returns `status=failed` and `lastStatusMessage="OTA timed out while downloading"`
 - Evidence: `GET /devices/SN005/health` now reports `lastFirmwareVersion=1.0.1-ota-hardening-16`, `lastOtaStatus=failed`, and continuing telemetry after the forced failure test
+- Evidence: true Wi-Fi-loss test on debug base `1.0.1-ota-wifi-drop-base-17` accepted `wifi_drop`, lost Wi-Fi and MQTT during OTA, reconnected successfully, and ended with `status":"failed","message":"OTA timed out while downloading"` for job `dcdcd8d5-edb1-47f3-ab18-6334ea484b55`
+- Evidence: clean release candidate `firmware-v1.0.1-release-candidate-19` was published to GitHub Releases and registered in production with SHA256 `d4edcd5e0d1166ddd98ab1e7fc16c6960aea37a46d4619e8af3e36f007a52531`
+- Evidence: policy-gated OTA job `3b9a0613-1d36-4073-a22b-4466633c5f6a` reached `status=success` and `GET /devices/SN005/health` now reports `lastFirmwareVersion=1.0.1-release-candidate-19`, `lastOtaStatus=success`, and continuing telemetry
 
 ## Suggested New Session Prompt
 

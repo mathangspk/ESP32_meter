@@ -21,11 +21,18 @@
 - `backend`
 - `assistant-bot`
 
+Optional debug-only runtime kept on host filesystem but not exposed by default:
+
+- firmware artifact directory: `/home/tma_agi/esp32_loss_power_deploy/firmware-host`
+- start on demand: `scripts/start-vps-firmware-host.sh /home/tma_agi/esp32_loss_power_deploy/firmware-host`
+- stop after test: `scripts/stop-vps-firmware-host.sh`
+
 Current host exposure:
 
 - MQTT public: `0.0.0.0:1883 -> mosquitto:1883`
 - backend host-local only: `127.0.0.1:3000 -> backend:3000`
 - MongoDB internal only
+- firmware debug host: off by default; only public when explicitly started for OTA diagnostics
 
 ## Current VPS-Specific Workarounds
 

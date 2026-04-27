@@ -166,6 +166,34 @@ Result:
   notes: true Wi-Fi-loss with MQTT disconnect was not physically reproduced yet, but deferred OTA status publish is now in place for that path
 ```
 
+## 2026-04-27 Release Candidate Cleanup
+
+```text
+Date: 2026-04-27
+Task: Remove temporary Wi-Fi-drop debug control from release firmware, keep VPS debug hosting on-demand only, and promote a clean release candidate to the live device
+BMAD path:
+  Brief: convert the hardened debug path into a cleaner release candidate without leaving permanent public debug exposure enabled
+  Mapping: inspect current firmware diff, VPS runtime docs, release catalog state, and current device firmware after Wi-Fi-loss testing
+  Architecture: strip the debug control from firmware, keep only on-demand host scripts in repo, build a clean v19 artifact, and promote it through the real GitHub Releases OTA path
+  Delivery: remove `wifi_drop`, add start/stop scripts for temporary VPS hosting, build release candidate v19, publish GitHub release, register catalog entry, and OTA SN005
+  Review: confirm final OTA success and device health on firmware `1.0.1-release-candidate-19` with debug host container stopped again
+Model usage:
+  cheap_steps: 1
+  build_steps: 5
+  deep_steps: 1
+  escalations: 0
+Execution:
+  files_changed: 5
+  verify_commands: OTA_FIRMWARE_VERSION=1.0.1-release-candidate-19 pio run -c platformio.ota.ini; gh release create firmware-v1.0.1-release-candidate-19; POST /admin/firmware/releases; POST /devices/SN005/ota; curl /ota/jobs/<jobId>; curl /devices/SN005/health; docker rm -f esp32-full-host
+  verify_passed: yes
+  rework_loops: 0
+Handoff:
+  handoff_updated: yes
+Result:
+  outcome: live device now runs clean release candidate firmware while VPS debug hosting remains available only as an explicit on-demand tool
+  notes: firmware checksum verification on-device still remains a worthwhile pre-broad-release hardening step
+```
+
 ## Current Pilot Entry
 
 ```text
