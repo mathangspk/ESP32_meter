@@ -6,6 +6,8 @@
 
 namespace
 {
+    constexpr uint32_t OTA_CLIENT_TIMEOUT_MS = 15000;
+
     bool isHttpsUrl(const String &url)
     {
         return url.startsWith("https://");
@@ -31,6 +33,7 @@ bool checkOtaUrlAvailable(const String &otaUrl)
     if (isHttpsUrl(otaUrl))
     {
         WiFiClientSecure client;
+        client.setTimeout(OTA_CLIENT_TIMEOUT_MS);
         if (!beginHttpClient(http, otaUrl, client))
         {
             Serial.println("Khong the bat dau ket noi OTA URL.");
@@ -50,6 +53,7 @@ bool checkOtaUrlAvailable(const String &otaUrl)
     }
 
     WiFiClient client;
+    client.setTimeout(OTA_CLIENT_TIMEOUT_MS);
     if (!beginHttpClient(http, otaUrl, client))
     {
         Serial.println("Khong the bat dau ket noi OTA URL.");
@@ -80,11 +84,13 @@ OtaUpdateResult handleOtaUpdate(const String &binUrl, String &message)
     {
         WiFiClientSecure client;
         client.setInsecure();
+        client.setTimeout(OTA_CLIENT_TIMEOUT_MS);
         ret = httpUpdate.update(client, binUrl);
     }
     else
     {
         WiFiClient client;
+        client.setTimeout(OTA_CLIENT_TIMEOUT_MS);
         ret = httpUpdate.update(client, binUrl);
     }
 

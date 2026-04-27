@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Review production OTA hardening after repeated live firmware updates on both HTTP and HTTPS artifact paths.
+Review production OTA hardening after successful HTTP/HTTPS updates and explicit mid-transfer failure testing.
 
 ## Current BMAD Phase
 
@@ -220,8 +220,8 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 
 ## Next Recommended Steps
 
-1. Run a longer stability check with `SN005` on firmware `1.0.1-ota-verification-12` and confirm telemetry stays healthy over time without serial attached.
-2. Test OTA failure behavior explicitly by interrupting network or download path mid-transfer and confirm backend receives a final `failed` status or at least device remains on previous firmware.
+1. Run a longer stability check with `SN005` on firmware `1.0.1-ota-hardening-16` and confirm telemetry stays healthy over time without serial attached.
+2. Test one true Wi-Fi-loss case if you want proof that deferred OTA status publish works after MQTT reconnect, not only for server-side drop/timeouts.
 3. Run live Telegram checks for questions like `Dòng là bao nhiêu bạn`, `Giá trị hiện tại của SN005`, and `Tôi muốn xem chi tiết thông tin thiết bị`.
 
 ## Known Constraints
@@ -241,6 +241,8 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - OTA now works against plain `http://` URLs because firmware selects `WiFiClient` for HTTP and `WiFiClientSecure` only for HTTPS
 - Temporary public firmware host on `:8081` was removed after non-serial verification; future debug runs must recreate it intentionally
 - Firmware policy can mislabel current device firmware as unsupported when that exact version is not present in the release catalog, even if OTA runtime itself is healthy
+- Mid-transfer server drop originally left OTA stuck in `downloading`; firmware now has a 45-second OTA watchdog that converts that hang into a final `failed` status while keeping the old firmware running
+- Deferred OTA status publish now queues status locally when MQTT is disconnected and flushes it after reconnect
 
 ## Most Relevant Commands
 
@@ -264,6 +266,7 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Production OTA over short VPS-hosted HTTP URL: passed
 - Production OTA repeat pass without serial attached: passed
 - Production OTA over HTTPS GitHub Releases: passed
+- OTA server-drop failure path with final `failed` status: passed after hardening
 - Backend domain foundation and fleet visibility milestone: passed
 - Assistant-bot baseline milestone: passed
 - Firmware release policy milestone: passed
@@ -317,6 +320,10 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Evidence: GitHub release `firmware-v1.0.1-ota-verification-12` was published and registered in the production firmware catalog with SHA256 `d84a5562780ce38962cdecd3c7a91695e8bf62808a0b366a3df2362ee2612494`
 - Evidence: policy-gated OTA job `a2d84934-6847-4ce8-bde3-fa770bfcbaed` reached `status=success` against a signed GitHub Releases HTTPS URL with `lastStatusMessage="Update applied successfully"`
 - Evidence: `GET /devices/SN005/health` now reports `lastFirmwareVersion=1.0.1-ota-verification-12`, `lastOtaStatus=success`, and fresh telemetry after the HTTPS OTA reboot
+- Evidence: before watchdog hardening, partial-transfer drop job `81783fc5-bd6e-408a-8106-fa4b448d1a2d` stayed at `status=downloading` for more than 5 minutes while `SN005` remained online on old firmware `1.0.1-ota-verification-12`
+- Evidence: after flashing `1.0.1-ota-hardening-16`, serial trace showed `OTA timed out, stopping stuck OTA task` followed by `status":"failed","message":"OTA timed out while downloading"` for job `2c1472cb-0c30-472e-8498-e4fd7a2e065e`
+- Evidence: `GET /ota/jobs/2c1472cb-0c30-472e-8498-e4fd7a2e065e` now returns `status=failed` and `lastStatusMessage="OTA timed out while downloading"`
+- Evidence: `GET /devices/SN005/health` now reports `lastFirmwareVersion=1.0.1-ota-hardening-16`, `lastOtaStatus=failed`, and continuing telemetry after the forced failure test
 
 ## Suggested New Session Prompt
 

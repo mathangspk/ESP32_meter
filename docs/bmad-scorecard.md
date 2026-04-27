@@ -138,6 +138,34 @@ Result:
   notes: release catalog hygiene still matters because firmware policy marks versions unsupported when they are missing from the catalog
 ```
 
+## 2026-04-27 OTA Failure Hardening
+
+```text
+Date: 2026-04-27
+Task: Reproduce OTA failure on mid-transfer server drop, capture exact behavior, and harden firmware so hung downloads terminate with a final failed status
+BMAD path:
+  Brief: verify what the ESP32 does when OTA download is interrupted and close the gap where backend could remain stuck at downloading forever
+  Mapping: create a public drop-server that advertises full firmware length but closes after 256 KiB, observe backend state, then inspect serial runtime during the fault
+  Architecture: add shorter client timeouts, defer OTA status publish until reconnect, and add an explicit OTA task watchdog to kill hung downloads after 45 seconds
+  Delivery: build failure artifacts, run repeated forced-failure jobs, flash hardened firmware v16 by USB, and rerun the drop test under serial observation
+  Review: confirm final backend job status is failed, device remains on old firmware, and telemetry continues after watchdog timeout
+Model usage:
+  cheap_steps: 2
+  build_steps: 7
+  deep_steps: 1
+  escalations: 1
+Execution:
+  files_changed: 5
+  verify_commands: OTA_FIRMWARE_VERSION=1.0.1-ota-failure-test-13 pio run -c platformio.ota.ini; curl -I/drop-test via temporary Docker host :8081; POST /ota/jobs with forced partial transfer; serial capture during fault; OTA_FIRMWARE_VERSION=1.0.1-ota-hardening-16 pio run -c platformio.ota.ini -t upload --upload-port /dev/cu.SLAB_USBtoUART; curl /ota/jobs/<jobId>; curl /devices/SN005/health
+  verify_passed: yes
+  rework_loops: 2
+Handoff:
+  handoff_updated: yes
+Result:
+  outcome: mid-transfer server drop no longer leaves OTA stuck forever; firmware now marks the job failed after a 45-second watchdog timeout and keeps the previous firmware running
+  notes: true Wi-Fi-loss with MQTT disconnect was not physically reproduced yet, but deferred OTA status publish is now in place for that path
+```
+
 ## Current Pilot Entry
 
 ```text

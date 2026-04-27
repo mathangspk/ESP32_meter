@@ -56,7 +56,21 @@ void DataSender::loop()
         reconnect();
     }
     client.loop();
+    flushPendingOtaStatus();
+    enforceOtaTimeout();
     processCompletedOta();
+}
+
+void DataSender::flushPendingOtaStatus()
+{
+    if (!hasPendingOtaStatus || !client.connected())
+    {
+        return;
+    }
+
+    PendingOtaStatus pending = pendingOtaStatus;
+    hasPendingOtaStatus = false;
+    publishOtaStatus(pending.jobId, pending.status, pending.message, pending.targetVersion);
 }
 
 void DataSender::processCompletedOta()
@@ -68,6 +82,8 @@ void DataSender::processCompletedOta()
 
     otaResultReady = false;
     otaTaskRunning = false;
+    otaTaskHandle = nullptr;
+    otaStartedAt = 0;
 
     switch (otaTaskResult)
     {
@@ -84,6 +100,29 @@ void DataSender::processCompletedOta()
         publishOtaStatus(otaJobId, "failed", otaResultMessage, otaTargetVersion);
         break;
     }
+}
+
+void DataSender::enforceOtaTimeout()
+{
+    if (!otaTaskRunning || otaTaskHandle == nullptr)
+    {
+        return;
+    }
+
+    unsigned long elapsed = millis() - otaStartedAt;
+    if (elapsed < OTA_TIMEOUT_MS)
+    {
+        return;
+    }
+
+    Serial.println("OTA timed out, stopping stuck OTA task");
+    vTaskDelete(otaTaskHandle);
+    otaTaskHandle = nullptr;
+    otaTaskRunning = false;
+    otaResultReady = false;
+    otaResultMessage = "OTA timed out while downloading";
+    publishOtaStatus(otaJobId, "failed", otaResultMessage, otaTargetVersion);
+    otaStartedAt = 0;
 }
 
 void DataSender::reconnect()
@@ -117,6 +156,7 @@ void DataSender::reconnect()
         client.subscribe(testTopic.c_str());
         Serial.print("Subscribed to: ");
         Serial.println(testTopic);
+        flushPendingOtaStatus();
         // Send buffered data if any
         sendBufferedData();
     }
@@ -228,11 +268,14 @@ void DataSender::callback(char *topic, byte *payload, unsigned int length)
             otaResultMessage = "";
             otaTaskRunning = true;
             otaResultReady = false;
+            otaStartedAt = millis();
 
             OtaTaskContext *context = new OtaTaskContext{this, otaUrl};
-            if (xTaskCreatePinnedToCore(DataSender::otaTaskEntry, "otaUpdate", 16384, context, 1, nullptr, 1) != pdPASS)
+            if (xTaskCreatePinnedToCore(DataSender::otaTaskEntry, "otaUpdate", 16384, context, 1, &otaTaskHandle, 1) != pdPASS)
             {
                 otaTaskRunning = false;
+                otaTaskHandle = nullptr;
+                otaStartedAt = 0;
                 delete context;
                 publishOtaStatus(jobId, "failed", "Failed to start OTA task", targetVersion);
             }
@@ -254,6 +297,7 @@ void DataSender::otaTaskEntry(void *parameter)
     context->sender->otaTaskResult = result;
     context->sender->otaResultMessage = message;
     context->sender->otaResultReady = true;
+    context->sender->otaTaskHandle = nullptr;
 
     delete context;
     vTaskDelete(nullptr);
@@ -263,7 +307,9 @@ void DataSender::publishOtaStatus(const String &jobId, const String &status, con
 {
     if (!client.connected())
     {
-        Serial.println("Cannot publish OTA status: MQTT not connected");
+        pendingOtaStatus = PendingOtaStatus{jobId, status, message, targetVersion};
+        hasPendingOtaStatus = true;
+        Serial.println("Cannot publish OTA status now: MQTT not connected, deferring until reconnect");
         return;
     }
 

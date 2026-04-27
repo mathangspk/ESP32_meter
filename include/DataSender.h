@@ -2,6 +2,8 @@
 #define DATASENDER_H
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <PubSubClient.h>
 #include <WiFiClient.h>
 #include "types/DataTypes.h"
@@ -21,6 +23,14 @@ public:
     PubSubClient &getClient();
 
 private:
+    struct PendingOtaStatus
+    {
+        String jobId;
+        String status;
+        String message;
+        String targetVersion;
+    };
+
     struct OtaTaskContext
     {
         DataSender *sender;
@@ -29,6 +39,8 @@ private:
 
     void reconnect();
     void processCompletedOta();
+    void flushPendingOtaStatus();
+    void enforceOtaTimeout();
     String getTimestamp();
     String createPayload(String serial_number, float voltage, float current, float power, float energy, String IPAddress);
     void callback(char *topic, byte *payload, unsigned int length);
@@ -62,12 +74,17 @@ private:
     volatile bool otaTaskRunning = false;
     volatile bool otaResultReady = false;
     OtaUpdateResult otaTaskResult = OtaUpdateResult::Failed;
+    TaskHandle_t otaTaskHandle = nullptr;
     String otaJobId;
     String otaTargetVersion;
     String otaResultMessage;
+    bool hasPendingOtaStatus = false;
+    PendingOtaStatus pendingOtaStatus;
+    unsigned long otaStartedAt = 0;
 
     unsigned long lastReconnectAttempt = 0;
     const unsigned long RECONNECT_INTERVAL = 5000; // 5 seconds
+    const unsigned long OTA_TIMEOUT_MS = 45000;
 };
 
 #endif // DATASENDER_H
