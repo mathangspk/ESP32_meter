@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Review production OTA hardening after repeated live firmware updates on VPS-backed MQTT.
+Review production OTA hardening after repeated live firmware updates on both HTTP and HTTPS artifact paths.
 
 ## Current BMAD Phase
 
@@ -220,8 +220,8 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 
 ## Next Recommended Steps
 
-1. Run a longer stability check with `SN005` on firmware `1.0.1-ota-verification-11` and confirm telemetry stays healthy over time without serial attached.
-2. Verify GitHub Releases OTA once more if you want proof that same firmware path still works for HTTPS-hosted artifacts after HTTP fix.
+1. Run a longer stability check with `SN005` on firmware `1.0.1-ota-verification-12` and confirm telemetry stays healthy over time without serial attached.
+2. Test OTA failure behavior explicitly by interrupting network or download path mid-transfer and confirm backend receives a final `failed` status or at least device remains on previous firmware.
 3. Run live Telegram checks for questions like `Dòng là bao nhiêu bạn`, `Giá trị hiện tại của SN005`, and `Tôi muốn xem chi tiết thông tin thiết bị`.
 
 ## Known Constraints
@@ -240,6 +240,7 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - Serial reads from the agent still reboot the board, so longer runtime checks should avoid opening the serial port unless actively debugging
 - OTA now works against plain `http://` URLs because firmware selects `WiFiClient` for HTTP and `WiFiClientSecure` only for HTTPS
 - Temporary public firmware host on `:8081` was removed after non-serial verification; future debug runs must recreate it intentionally
+- Firmware policy can mislabel current device firmware as unsupported when that exact version is not present in the release catalog, even if OTA runtime itself is healthy
 
 ## Most Relevant Commands
 
@@ -262,6 +263,7 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - OTA control plane dry-run with real ESP32: passed
 - Production OTA over short VPS-hosted HTTP URL: passed
 - Production OTA repeat pass without serial attached: passed
+- Production OTA over HTTPS GitHub Releases: passed
 - Backend domain foundation and fleet visibility milestone: passed
 - Assistant-bot baseline milestone: passed
 - Firmware release policy milestone: passed
@@ -312,6 +314,9 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Evidence: `GET /devices/SN005/health` now reports `lastFirmwareVersion=1.0.1-ota-verification-10`, `lastOtaStatus=success`, and fresh telemetry after reboot
 - Evidence: direct OTA job `bb351eec-93fa-4bf7-b46a-5a9da15b9b45` reached `status=success` without any serial capture and `GET /devices/SN005/health` advanced to `lastFirmwareVersion=1.0.1-ota-verification-11`
 - Evidence: after validation, VPS container `esp32-firmware-host` was removed and `curl -I http://113.161.220.166:8081/...` now fails to connect
+- Evidence: GitHub release `firmware-v1.0.1-ota-verification-12` was published and registered in the production firmware catalog with SHA256 `d84a5562780ce38962cdecd3c7a91695e8bf62808a0b366a3df2362ee2612494`
+- Evidence: policy-gated OTA job `a2d84934-6847-4ce8-bde3-fa770bfcbaed` reached `status=success` against a signed GitHub Releases HTTPS URL with `lastStatusMessage="Update applied successfully"`
+- Evidence: `GET /devices/SN005/health` now reports `lastFirmwareVersion=1.0.1-ota-verification-12`, `lastOtaStatus=success`, and fresh telemetry after the HTTPS OTA reboot
 
 ## Suggested New Session Prompt
 

@@ -110,6 +110,34 @@ Result:
   notes: direct HTTP-hosted debug path is no longer exposed on VPS after verification
 ```
 
+## 2026-04-27 OTA HTTPS GitHub Recheck
+
+```text
+Date: 2026-04-27
+Task: Re-verify production OTA over GitHub Releases HTTPS artifacts after fixing HTTP-versus-HTTPS client selection in firmware
+BMAD path:
+  Brief: confirm that firmware still updates correctly through the real production HTTPS release path, not only through a temporary HTTP debug host
+  Mapping: inspect production firmware catalog, GitHub releases, device health, and policy-gated OTA endpoint behavior
+  Architecture: build a fresh v12 artifact, publish it to GitHub Releases, register it in the production firmware catalog, then trigger OTA through `/devices/SN005/ota`
+  Delivery: build v12, create release `firmware-v1.0.1-ota-verification-12`, add catalog record, and run policy-gated OTA to SN005
+  Review: confirm OTA job success and post-reboot device health reporting firmware v12
+Model usage:
+  cheap_steps: 1
+  build_steps: 4
+  deep_steps: 1
+  escalations: 0
+Execution:
+  files_changed: 2
+  verify_commands: OTA_FIRMWARE_VERSION=1.0.1-ota-verification-12 pio run -c platformio.ota.ini; gh release create firmware-v1.0.1-ota-verification-12; curl /admin/firmware/releases; POST /devices/SN005/ota; curl /ota/jobs/<jobId>; curl /devices/SN005/health
+  verify_passed: yes
+  rework_loops: 0
+Handoff:
+  handoff_updated: yes
+Result:
+  outcome: GitHub Releases HTTPS OTA is verified end-to-end and SN005 now reports firmware 1.0.1-ota-verification-12
+  notes: release catalog hygiene still matters because firmware policy marks versions unsupported when they are missing from the catalog
+```
+
 ## Current Pilot Entry
 
 ```text
