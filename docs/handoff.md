@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Prepare and execute a production-hardened VPS deployment for the Docker stack.
+Review production OTA hardening after repeated live firmware updates on VPS-backed MQTT.
 
 ## Current BMAD Phase
 
@@ -220,9 +220,9 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 
 ## Next Recommended Steps
 
-1. Run a longer stability check with `SN005` on firmware `1.0.1-ota-verification-3` and confirm telemetry stays healthy over time.
-2. Verify OTA once more without serial intervention only if you want an extra confidence pass on the new firmware image.
-3. Run live Telegram checks for questions like `hom nay dung bao nhieu kWh`, `gio nao dung dien nhieu nhat`, and `hien tai dien ap cong suat bao nhieu`.
+1. Run a longer stability check with `SN005` on firmware `1.0.1-ota-verification-11` and confirm telemetry stays healthy over time without serial attached.
+2. Verify GitHub Releases OTA once more if you want proof that same firmware path still works for HTTPS-hosted artifacts after HTTP fix.
+3. Run live Telegram checks for questions like `Dòng là bao nhiêu bạn`, `Giá trị hiện tại của SN005`, and `Tôi muốn xem chi tiết thông tin thiết bị`.
 
 ## Known Constraints
 
@@ -238,6 +238,8 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - Reading USB serial from the agent still reboots the ESP32, which makes OTA runtime diagnosis less reliable inside this shell than in a normal local terminal
 - Telegram outbound is verified, but inbound command verification through live Telegram chat is still not fully captured in this session log
 - Serial reads from the agent still reboot the board, so longer runtime checks should avoid opening the serial port unless actively debugging
+- OTA now works against plain `http://` URLs because firmware selects `WiFiClient` for HTTP and `WiFiClientSecure` only for HTTPS
+- Temporary public firmware host on `:8081` was removed after non-serial verification; future debug runs must recreate it intentionally
 
 ## Most Relevant Commands
 
@@ -258,6 +260,8 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Local container stack verification: passed with `colima`
 - Real ESP32 to local backend ingest: passed
 - OTA control plane dry-run with real ESP32: passed
+- Production OTA over short VPS-hosted HTTP URL: passed
+- Production OTA repeat pass without serial attached: passed
 - Backend domain foundation and fleet visibility milestone: passed
 - Assistant-bot baseline milestone: passed
 - Firmware release policy milestone: passed
@@ -303,6 +307,11 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 - Evidence: serial trace after the NTP fix showed `Time synced!` during boot on SSID `Thanh`
 - Evidence: OTA job `4863f80d-bc41-41ab-a202-1f63d8c1e71e` reached `status=success` with `lastStatusMessage="Update applied successfully"`
 - Evidence: `GET /devices/SN005/health` now reports `lastFirmwareVersion=1.0.1-ota-verification-3` and `lastOtaStatus=success`
+- Evidence: direct OTA job `ae82d81e-d935-4cf3-b577-bad262a8f859` reached `received -> downloading -> success` against `http://113.161.220.166:8081/esp32-meter-1.0.1-ota-verification-10.bin`
+- Evidence: serial trace showed `Cập nhật thành công! Đang khởi động lại...` followed by reboot and fresh telemetry on firmware `1.0.1-ota-verification-10`
+- Evidence: `GET /devices/SN005/health` now reports `lastFirmwareVersion=1.0.1-ota-verification-10`, `lastOtaStatus=success`, and fresh telemetry after reboot
+- Evidence: direct OTA job `bb351eec-93fa-4bf7-b46a-5a9da15b9b45` reached `status=success` without any serial capture and `GET /devices/SN005/health` advanced to `lastFirmwareVersion=1.0.1-ota-verification-11`
+- Evidence: after validation, VPS container `esp32-firmware-host` was removed and `curl -I http://113.161.220.166:8081/...` now fails to connect
 
 ## Suggested New Session Prompt
 

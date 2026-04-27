@@ -54,6 +54,62 @@ Result:
   notes:
 ```
 
+## 2026-04-27 OTA HTTP Client Split
+
+```text
+Date: 2026-04-27
+Task: Restore production OTA when firmware URL is served over plain HTTP from VPS debug host
+BMAD path:
+  Brief: make OTA succeed end-to-end again after serial logs showed SSL client failure on an HTTP URL
+  Mapping: inspect DataSender OTA payload handling, OTAUpdate client selection, current handoff state, and live VPS firmware host path
+  Architecture: keep HTTPS support, add HTTP client path with minimal branching, and preserve OTA status metadata across async task boundaries
+  Delivery: patch firmware, build clean images, upload v9 by USB, host v10 on VPS, and trigger live OTA job
+  Review: confirm serial success trace, backend final job state, and post-reboot firmware version in device health
+Model usage:
+  cheap_steps: 2
+  build_steps: 5
+  deep_steps: 1
+  escalations: 1
+Execution:
+  files_changed: 4
+  verify_commands: pio run -t clean -c platformio.ota.ini; OTA_FIRMWARE_VERSION=1.0.1-ota-verification-9 pio run -c platformio.ota.ini -t upload --upload-port /dev/cu.SLAB_USBtoUART; OTA_FIRMWARE_VERSION=1.0.1-ota-verification-10 pio run -c platformio.ota.ini; curl -I http://113.161.220.166:8081/esp32-meter-1.0.1-ota-verification-10.bin; curl /ota/jobs/<jobId>; curl /devices/SN005/health; controlled serial trace
+  verify_passed: yes
+  rework_loops: 1
+Handoff:
+  handoff_updated: yes
+Result:
+  outcome: production OTA now succeeds over VPS-hosted short HTTP URL and device reports firmware 1.0.1-ota-verification-10 after reboot
+  notes: root cause was using WiFiClientSecure for every OTA URL; firmware now uses WiFiClient for HTTP and WiFiClientSecure for HTTPS
+```
+
+## 2026-04-27 OTA Non-Serial Confidence Pass
+
+```text
+Date: 2026-04-27
+Task: Prove OTA still succeeds without USB serial attached, then remove temporary public firmware host
+BMAD path:
+  Brief: confirm OTA no longer depends on serial-assisted timing and close temporary debug exposure when proof exists
+  Mapping: inspect current device health, hosted firmware path, and active VPS debug container state
+  Architecture: build one more OTA image, trigger direct job over backend only, verify through API state transitions, then remove host container
+  Delivery: build v11, host artifact, create OTA job, poll backend state, and delete `esp32-firmware-host`
+  Review: confirm final OTA job success, device health on v11, and failed connection to port 8081 after removal
+Model usage:
+  cheap_steps: 1
+  build_steps: 4
+  deep_steps: 1
+  escalations: 0
+Execution:
+  files_changed: 2
+  verify_commands: OTA_FIRMWARE_VERSION=1.0.1-ota-verification-11 pio run -c platformio.ota.ini; curl -I http://113.161.220.166:8081/esp32-meter-1.0.1-ota-verification-11.bin; curl /ota/jobs/<jobId>; curl /devices/SN005/health; docker rm -f esp32-firmware-host; curl -I http://113.161.220.166:8081/...
+  verify_passed: yes
+  rework_loops: 0
+Handoff:
+  handoff_updated: yes
+Result:
+  outcome: non-serial OTA confidence pass succeeded and temporary public firmware host was removed
+  notes: direct HTTP-hosted debug path is no longer exposed on VPS after verification
+```
+
 ## Current Pilot Entry
 
 ```text

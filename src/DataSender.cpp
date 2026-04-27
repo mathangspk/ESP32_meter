@@ -19,7 +19,7 @@ DataSender::DataSender()
     : mqttServer("113.161.220.166"), mqttPort(1883), deviceId("5"), serialNumber("SN005"),
       client(wifiClient), bufferIndex(0), bufferCount(0)
 {
-    client.setBufferSize(2048);
+    client.setBufferSize(8192);
     client.setKeepAlive(120);
     client.setCallback([this](char *topic, byte *payload, unsigned int length)
                        { this->callback(topic, payload, length); });
@@ -130,35 +130,31 @@ void DataSender::reconnect()
 
 void DataSender::callback(char *topic, byte *payload, unsigned int length)
 {
+    String expectedTopic = "firmwareUpdateOTA/device/" + String(serialNumber);
+    String controlTopic = "meter/" + String(deviceId) + "/control";
+
     Serial.print("Message arrived [");
     Serial.print(topic);
     Serial.print("] ");
 
-    String message;
-    for (unsigned int i = 0; i < length; i++)
-    {
-        message += (char)payload[i];
-    }
-    Serial.println(message);
-
-    // Parse JSON
-    StaticJsonDocument<4096> doc;
-    DeserializationError error = deserializeJson(doc, message);
-    if (error)
-    {
-        Serial.print("deserializeJson() failed: ");
-        Serial.println(error.f_str());
-        return;
-    }
-
-    const char *ota_url = doc["url"] | doc["OTAurl"];
-    const char *job_id = doc["job_id"] | "";
-    const char *target_version = doc["version"] | "";
-    String expectedTopic = "firmwareUpdateOTA/device/" + String(serialNumber);
-    String controlTopic = "meter/" + String(deviceId) + "/control";
-
     if (String(topic) == controlTopic)
     {
+        String message;
+        for (unsigned int i = 0; i < length; i++)
+        {
+            message += (char)payload[i];
+        }
+        Serial.println(message);
+
+        StaticJsonDocument<512> doc;
+        DeserializationError error = deserializeJson(doc, payload, length);
+        if (error)
+        {
+            Serial.print("deserializeJson() failed: ");
+            Serial.println(error.f_str());
+            return;
+        }
+
         const char *action = doc["action"] | "";
         const char *command_id = doc["command_id"] | "";
         Serial.printf("Received control command: %s (%s)\n", action, command_id);
@@ -188,38 +184,63 @@ void DataSender::callback(char *topic, byte *payload, unsigned int length)
 
     if (String(topic) == expectedTopic)
     {
+        String message;
+        for (unsigned int i = 0; i < length; i++)
+        {
+            message += (char)payload[i];
+        }
+        Serial.println(message);
+
+        const size_t docCapacity = length + 2048;
+        DynamicJsonDocument doc(docCapacity);
+        DeserializationError error = deserializeJson(doc, payload, length);
+        if (error)
+        {
+            Serial.print("deserializeJson() failed: ");
+            Serial.println(error.f_str());
+            return;
+        }
+
+        String otaUrl = doc["url"].as<String>();
+        if (otaUrl.isEmpty())
+        {
+            otaUrl = doc["OTAurl"].as<String>();
+        }
+        String jobId = doc["job_id"].as<String>();
+        String targetVersion = doc["version"].as<String>();
+
         if (otaTaskRunning)
         {
-            publishOtaStatus(job_id, "failed", "OTA already in progress", target_version);
+            publishOtaStatus(jobId, "failed", "OTA already in progress", targetVersion);
             return;
         }
 
         Serial.println("Received OTA update command");
-        publishOtaStatus(job_id, "received", "OTA command received", target_version);
+        publishOtaStatus(jobId, "received", "OTA command received", targetVersion);
 
-        if (ota_url && String(ota_url).startsWith("http"))
+        if (!otaUrl.isEmpty() && otaUrl.startsWith("http"))
         {
-            Serial.printf("Starting OTA update from URL: %s\n", ota_url);
-            publishOtaStatus(job_id, "downloading", "Firmware download started", target_version);
+            Serial.printf("Starting OTA update from URL: %s\n", otaUrl.c_str());
+            publishOtaStatus(jobId, "downloading", "Firmware download started", targetVersion);
 
-            otaJobId = String(job_id);
-            otaTargetVersion = String(target_version);
+            otaJobId = jobId;
+            otaTargetVersion = targetVersion;
             otaResultMessage = "";
             otaTaskRunning = true;
             otaResultReady = false;
 
-            OtaTaskContext *context = new OtaTaskContext{this, String(ota_url)};
+            OtaTaskContext *context = new OtaTaskContext{this, otaUrl};
             if (xTaskCreatePinnedToCore(DataSender::otaTaskEntry, "otaUpdate", 16384, context, 1, nullptr, 1) != pdPASS)
             {
                 otaTaskRunning = false;
                 delete context;
-                publishOtaStatus(job_id, "failed", "Failed to start OTA task", target_version);
+                publishOtaStatus(jobId, "failed", "Failed to start OTA task", targetVersion);
             }
         }
         else
         {
             Serial.println("Invalid OTA URL received!");
-            publishOtaStatus(job_id, "failed", "Invalid OTA URL", target_version);
+            publishOtaStatus(jobId, "failed", "Invalid OTA URL", targetVersion);
         }
     }
 }

@@ -4,14 +4,53 @@
 #include <WiFiClient.h>
 #include <HTTPClient.h>
 
+namespace
+{
+    bool isHttpsUrl(const String &url)
+    {
+        return url.startsWith("https://");
+    }
+
+    bool beginHttpClient(HTTPClient &http, const String &url, WiFiClient &client)
+    {
+        if (isHttpsUrl(url))
+        {
+            WiFiClientSecure &secureClient = static_cast<WiFiClientSecure &>(client);
+            secureClient.setInsecure();
+        }
+
+        http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+        return http.begin(client, url);
+    }
+}
+
 bool checkOtaUrlAvailable(const String &otaUrl)
 {
-    WiFiClientSecure client;
-    client.setInsecure();
-
     HTTPClient http;
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    if (!http.begin(client, otaUrl))
+
+    if (isHttpsUrl(otaUrl))
+    {
+        WiFiClientSecure client;
+        if (!beginHttpClient(http, otaUrl, client))
+        {
+            Serial.println("Khong the bat dau ket noi OTA URL.");
+            return false;
+        }
+
+        int httpCode = http.GET();
+        http.end();
+        if (httpCode == 200)
+        {
+            Serial.println("OTA URL khả dụng!");
+            return true;
+        }
+
+        Serial.printf("OTA URL không khả dụng, HTTP code: %d\n", httpCode);
+        return false;
+    }
+
+    WiFiClient client;
+    if (!beginHttpClient(http, otaUrl, client))
     {
         Serial.println("Khong the bat dau ket noi OTA URL.");
         return false;
@@ -34,11 +73,20 @@ bool checkOtaUrlAvailable(const String &otaUrl)
 OtaUpdateResult handleOtaUpdate(const String &binUrl, String &message)
 {
     Serial.println("Bắt đầu OTA từ URL: " + binUrl);
-    WiFiClientSecure client;
-    client.setInsecure(); // Bỏ qua kiểm tra chứng chỉ SSL
     httpUpdate.rebootOnUpdate(false);
 
-    t_httpUpdate_return ret = httpUpdate.update(client, binUrl);
+    t_httpUpdate_return ret;
+    if (isHttpsUrl(binUrl))
+    {
+        WiFiClientSecure client;
+        client.setInsecure();
+        ret = httpUpdate.update(client, binUrl);
+    }
+    else
+    {
+        WiFiClient client;
+        ret = httpUpdate.update(client, binUrl);
+    }
 
     switch (ret)
     {
