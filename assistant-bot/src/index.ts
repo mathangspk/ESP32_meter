@@ -197,7 +197,7 @@ function normalizeVietnameseText(value: string): string {
 }
 
 function normalizeIdentifier(value: string): string {
-  return normalizeVietnameseText(value);
+  return normalizeVietnameseText(value).replace(/\s+/g, "");
 }
 
 async function getAccessibleDevices(user: { defaultTenantId?: string }, memberships: Membership[]) {
@@ -253,6 +253,77 @@ function formatAnalyticsFallback(summary: Awaited<ReturnType<typeof backendClien
   return parts.filter(Boolean).join(" ");
 }
 
+function formatEnergyAnalyticsFallback(summary: Awaited<ReturnType<typeof backendClient.getDeviceEnergyAnalytics>>): string {
+  const label = summary.displayName ?? summary.serialNumber;
+  const labelRange = summary.requestedStartDate && summary.requestedEndDate
+    ? `Tu ${summary.requestedStartDate} den ${summary.requestedEndDate}`
+    : summary.preset === "today"
+      ? "Hom nay tu 00:00 den hien tai"
+      : summary.preset === "yesterday"
+        ? "Hom qua"
+        : summary.preset === "last_7_days"
+          ? "7 ngay qua"
+          : summary.preset === "this_week"
+            ? "Tuan nay"
+            : summary.preset === "last_week"
+              ? "Tuan truoc"
+              : summary.preset === "this_month"
+                ? "Thang nay"
+                : summary.preset === "last_month"
+                  ? "Thang truoc"
+                  : "Khoang da chon";
+
+  if (summary.energyKwh === undefined) {
+    return `${label}: chua du du lieu tin cay de tinh dien nang cho ${labelRange.toLowerCase()}. Mui gio ${summary.siteTimezone}.`;
+  }
+
+  const withAverage =
+    summary.preset === "last_7_days" ||
+    summary.preset === "last_week" ||
+    summary.preset === "last_month" ||
+    (!summary.preset && summary.averageDailyKwh !== undefined);
+
+  return withAverage && summary.averageDailyKwh !== undefined
+    ? `${label}: ${labelRange.toLowerCase()} da dung ${summary.energyKwh.toFixed(3)} kWh, trung binh ${summary.averageDailyKwh.toFixed(3)} kWh/ngay. Mui gio ${summary.siteTimezone}.`
+    : `${label}: ${labelRange.toLowerCase()} da dung ${summary.energyKwh.toFixed(3)} kWh. Mui gio ${summary.siteTimezone}.`;
+}
+
+function isEnergyRangeIntent(intent: Awaited<ReturnType<typeof parseAnalyticsIntent>>["intent"]) {
+  return [
+    "get_today_energy",
+    "get_yesterday_energy",
+    "get_last_7_days_energy",
+    "get_this_week_energy",
+    "get_last_week_energy",
+    "get_this_month_energy",
+    "get_last_month_energy",
+    "get_date_range_energy",
+  ].includes(intent);
+}
+
+function toEnergyQuery(intent: Awaited<ReturnType<typeof parseAnalyticsIntent>>) {
+  switch (intent.intent) {
+    case "get_today_energy":
+      return { preset: "today" as const };
+    case "get_yesterday_energy":
+      return { preset: "yesterday" as const };
+    case "get_last_7_days_energy":
+      return { preset: "last_7_days" as const };
+    case "get_this_week_energy":
+      return { preset: "this_week" as const };
+    case "get_last_week_energy":
+      return { preset: "last_week" as const };
+    case "get_this_month_energy":
+      return { preset: "this_month" as const };
+    case "get_last_month_energy":
+      return { preset: "last_month" as const };
+    case "get_date_range_energy":
+      return intent.startDate && intent.endDate ? { startDate: intent.startDate, endDate: intent.endDate } : undefined;
+    default:
+      return undefined;
+  }
+}
+
 async function handleAnalyticsQuestion(chatId: number, text: string, user: { userId: string; defaultTenantId?: string }, memberships: Membership[]) {
   const intent = await parseAnalyticsIntent(text);
   if (intent.intent === "unknown") {
@@ -272,6 +343,19 @@ async function handleAnalyticsQuestion(chatId: number, text: string, user: { use
         ? "Minh chua xac dinh duoc chinh xac thiet bi ban muon hoi. Hay gui lai serial, device ID, hoac ten thiet bi dung hon."
         : `Ban muon hoi thiet bi nao? Hien co: ${devices.map((candidate) => candidate.displayName ?? candidate.serialNumber).join(", ")}`,
     );
+    return true;
+  }
+
+  if (isEnergyRangeIntent(intent.intent)) {
+    const energyQuery = toEnergyQuery(intent);
+    if (!energyQuery) {
+      await sendMessage(chatId, "Minh chua hieu ro khoang thoi gian ban muon thong ke. Hay gui lai theo dang tu ngay dd/mm den dd/mm.");
+      return true;
+    }
+
+    const summary = await backendClient.getDeviceEnergyAnalytics(device.serialNumber, energyQuery);
+    const answer = await renderAnalyticsAnswer(text, intent.intent, summary);
+    await sendMessage(chatId, answer ?? formatEnergyAnalyticsFallback(summary));
     return true;
   }
 

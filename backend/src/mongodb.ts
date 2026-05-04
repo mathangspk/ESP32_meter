@@ -293,7 +293,52 @@ export type DeviceAnalyticsSummary = {
   messages: string[];
 };
 
+export type EnergyAnalyticsPreset =
+  | "today"
+  | "yesterday"
+  | "last_7_days"
+  | "this_week"
+  | "last_week"
+  | "this_month"
+  | "last_month";
+
+export type DeviceEnergyAnalyticsSummary = {
+  serialNumber: string;
+  deviceId: string;
+  displayName?: string;
+  tenantId?: string;
+  siteId?: string;
+  siteTimezone: string;
+  rangeStart: Date;
+  rangeEnd: Date;
+  preset?: EnergyAnalyticsPreset;
+  requestedStartDate?: string;
+  requestedEndDate?: string;
+  dayCount: number;
+  energyKwh?: number;
+  averageDailyKwh?: number;
+  sampleCount: number;
+  dataStatus: "ok" | "insufficient_data" | "counter_reset_detected";
+  messages: string[];
+};
+
+type TimeRange = {
+  rangeStart: Date;
+  rangeEnd: Date;
+  dayCount: number;
+};
+
+type EnergyRangeOptions = { preset: EnergyAnalyticsPreset } | { startDate: string; endDate: string };
+
+type BoundaryTelemetrySnapshot = Pick<TelemetryRecord, "timestamp" | "energy" | "voltage" | "current" | "power">;
+
+type BoundaryResolution =
+  | { status: "ok"; sample: BoundaryTelemetrySnapshot; mode: "at_or_before" | "after_fallback" }
+  | { status: "missing"; reason: string };
+
 const DEFAULT_SITE_TIMEZONE = "Asia/Ho_Chi_Minh";
+const BOUNDARY_MAX_GAP_MS = 5 * 60 * 1000;
+const MIN_VALID_VOLTAGE = 50;
 
 function getTimeZoneParts(date: Date, timeZone: string) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -348,6 +393,128 @@ function getLocalDayBounds(now: Date, timeZone: string) {
   };
   const dayEnd = zonedDateTimeToUtc(nextDayParts, timeZone);
   return { dayStart, dayEnd };
+}
+
+function addLocalDays(date: Date, timeZone: string, amount: number) {
+  const parts = getTimeZoneParts(date, timeZone);
+  const seed = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + amount, 0, 0, 0, 0));
+  return zonedDateTimeToUtc(
+    {
+      year: seed.getUTCFullYear(),
+      month: seed.getUTCMonth() + 1,
+      day: seed.getUTCDate(),
+    },
+    timeZone,
+  );
+}
+
+function getLocalWeekStart(now: Date, timeZone: string) {
+  const localNow = getTimeZoneParts(now, timeZone);
+  const jsDay = new Date(Date.UTC(localNow.year, localNow.month - 1, localNow.day)).getUTCDay();
+  const daysSinceMonday = (jsDay + 6) % 7;
+  return addLocalDays(zonedDateTimeToUtc({ year: localNow.year, month: localNow.month, day: localNow.day }, timeZone), timeZone, -daysSinceMonday);
+}
+
+function getLocalMonthStart(now: Date, timeZone: string) {
+  const localNow = getTimeZoneParts(now, timeZone);
+  return zonedDateTimeToUtc({ year: localNow.year, month: localNow.month, day: 1 }, timeZone);
+}
+
+function getInclusiveLocalDayCount(rangeStart: Date, rangeEndExclusive: Date, timeZone: string) {
+  const start = getTimeZoneParts(rangeStart, timeZone);
+  const endSeed = new Date(rangeEndExclusive.getTime() - 1);
+  const end = getTimeZoneParts(endSeed, timeZone);
+  const startUtc = Date.UTC(start.year, start.month - 1, start.day, 0, 0, 0, 0);
+  const endUtc = Date.UTC(end.year, end.month - 1, end.day, 0, 0, 0, 0);
+  return Math.floor((endUtc - startUtc) / (24 * 60 * 60 * 1000)) + 1;
+}
+
+function resolveEnergyPresetRange(preset: EnergyAnalyticsPreset, now: Date, timeZone: string) {
+  const { dayStart: todayStart } = getLocalDayBounds(now, timeZone);
+  switch (preset) {
+    case "today":
+      return { rangeStart: todayStart, rangeEnd: now, dayCount: 1 };
+    case "yesterday": {
+      const yesterdayStart = addLocalDays(todayStart, timeZone, -1);
+      return { rangeStart: yesterdayStart, rangeEnd: todayStart, dayCount: 1 };
+    }
+    case "last_7_days":
+      return { rangeStart: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), rangeEnd: now, dayCount: 7 };
+    case "this_week": {
+      const weekStart = getLocalWeekStart(now, timeZone);
+      return { rangeStart: weekStart, rangeEnd: now, dayCount: getInclusiveLocalDayCount(weekStart, now, timeZone) };
+    }
+    case "last_week": {
+      const thisWeekStart = getLocalWeekStart(now, timeZone);
+      const lastWeekStart = addLocalDays(thisWeekStart, timeZone, -7);
+      return { rangeStart: lastWeekStart, rangeEnd: thisWeekStart, dayCount: 7 };
+    }
+    case "this_month": {
+      const monthStart = getLocalMonthStart(now, timeZone);
+      return { rangeStart: monthStart, rangeEnd: now, dayCount: getInclusiveLocalDayCount(monthStart, now, timeZone) };
+    }
+    case "last_month": {
+      const thisMonthStart = getLocalMonthStart(now, timeZone);
+      const lastMonthSeed = new Date(thisMonthStart.getTime() - 1);
+      const lastMonthStart = getLocalMonthStart(lastMonthSeed, timeZone);
+      return {
+        rangeStart: lastMonthStart,
+        rangeEnd: thisMonthStart,
+        dayCount: getInclusiveLocalDayCount(lastMonthStart, thisMonthStart, timeZone),
+      };
+    }
+  }
+}
+
+function resolveCustomDateRange(startDate: string, endDate: string, timeZone: string) {
+  const parseDate = (value: string) => {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+      throw new Error("Dates must use YYYY-MM-DD format");
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+      throw new Error("Invalid date value");
+    }
+
+    return { year, month, day };
+  };
+
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
+  const rangeStart = zonedDateTimeToUtc(start, timeZone);
+  const endStart = zonedDateTimeToUtc(end, timeZone);
+  const rangeEnd = addLocalDays(endStart, timeZone, 1);
+  if (rangeEnd <= rangeStart) {
+    throw new Error("endDate must be on or after startDate");
+  }
+
+  return {
+    rangeStart,
+    rangeEnd,
+    dayCount: getInclusiveLocalDayCount(rangeStart, rangeEnd, timeZone),
+  };
+}
+
+function getSegmentEnd(cursor: Date, rangeEnd: Date, timeZone: string) {
+  const local = getTimeZoneParts(cursor, timeZone);
+  const dayStart = zonedDateTimeToUtc({ year: local.year, month: local.month, day: local.day }, timeZone);
+  const nextDayStart = addLocalDays(dayStart, timeZone, 1);
+  return nextDayStart < rangeEnd ? nextDayStart : rangeEnd;
+}
+
+function buildRangeSegments(rangeStart: Date, rangeEnd: Date, timeZone: string) {
+  const segments: Array<{ start: Date; end: Date }> = [];
+  let cursor = rangeStart;
+  while (cursor < rangeEnd) {
+    const end = getSegmentEnd(cursor, rangeEnd, timeZone);
+    segments.push({ start: cursor, end });
+    cursor = end;
+  }
+  return segments;
 }
 
 type FleetSummary = {
@@ -870,6 +1037,161 @@ export class MongoService {
       peakHourAveragePower: peakHour ? Number(peakHour.averagePower.toFixed(1)) : undefined,
       sampleCount,
       dataStatus,
+      messages,
+    };
+  }
+
+  private async getValidTelemetryAtOrBefore(serialNumber: string, boundary: Date) {
+    return this.telemetry.findOne(
+      {
+        serialNumber,
+        timestamp: { $lte: boundary },
+        voltage: { $gt: MIN_VALID_VOLTAGE },
+      },
+      {
+        sort: { timestamp: -1 },
+        projection: { _id: 0, timestamp: 1, energy: 1, voltage: 1, current: 1, power: 1 },
+      },
+    );
+  }
+
+  private async getValidTelemetryAfter(serialNumber: string, boundary: Date) {
+    return this.telemetry.findOne(
+      {
+        serialNumber,
+        timestamp: { $gt: boundary, $lte: new Date(boundary.getTime() + BOUNDARY_MAX_GAP_MS) },
+        voltage: { $gt: MIN_VALID_VOLTAGE },
+      },
+      {
+        sort: { timestamp: 1 },
+        projection: { _id: 0, timestamp: 1, energy: 1, voltage: 1, current: 1, power: 1 },
+      },
+    );
+  }
+
+  private async resolveBoundaryTelemetry(serialNumber: string, boundary: Date): Promise<BoundaryResolution> {
+    const beforeSample = await this.getValidTelemetryAtOrBefore(serialNumber, boundary);
+    if (beforeSample && boundary.getTime() - beforeSample.timestamp.getTime() <= BOUNDARY_MAX_GAP_MS) {
+      return { status: "ok", sample: beforeSample, mode: "at_or_before" };
+    }
+
+    const afterSample = await this.getValidTelemetryAfter(serialNumber, boundary);
+    if (afterSample) {
+      return { status: "ok", sample: afterSample, mode: "after_fallback" };
+    }
+
+    return {
+      status: "missing",
+      reason: `Missing valid telemetry within ${Math.floor(BOUNDARY_MAX_GAP_MS / 60000)} minutes of boundary ${boundary.toISOString()}.`,
+    };
+  }
+
+  private async computeEnergyDeltaForSegment(serialNumber: string, start: Date, end: Date) {
+    const [startBoundary, endBoundary] = await Promise.all([
+      this.resolveBoundaryTelemetry(serialNumber, start),
+      this.resolveBoundaryTelemetry(serialNumber, end),
+    ]);
+
+    if (startBoundary.status === "missing") {
+      return { status: "insufficient_data" as const, message: `Missing start boundary for segment ${start.toISOString()} -> ${end.toISOString()}. ${startBoundary.reason}` };
+    }
+
+    if (endBoundary.status === "missing") {
+      return { status: "insufficient_data" as const, message: `Missing end boundary for segment ${start.toISOString()} -> ${end.toISOString()}. ${endBoundary.reason}` };
+    }
+
+    const delta = endBoundary.sample.energy - startBoundary.sample.energy;
+    if (delta < 0) {
+      return { status: "counter_reset_detected" as const, message: `Energy counter moved backwards for segment ${start.toISOString()} -> ${end.toISOString()}.` };
+    }
+
+    return {
+      status: "ok" as const,
+      delta,
+      startMode: startBoundary.mode,
+      endMode: endBoundary.mode,
+    };
+  }
+
+  private async computeEnergyForRange(serialNumber: string, range: TimeRange, timeZone: string) {
+    const segments = buildRangeSegments(range.rangeStart, range.rangeEnd, timeZone);
+    if (segments.length === 0) {
+      return { dataStatus: "insufficient_data" as const, messages: ["Selected range does not contain any time segment."], energyKwh: undefined, averageDailyKwh: undefined };
+    }
+
+    let total = 0;
+    const messages: string[] = [];
+    for (const segment of segments) {
+      const result = await this.computeEnergyDeltaForSegment(serialNumber, segment.start, segment.end);
+      if (result.status === "insufficient_data") {
+        messages.push(result.message);
+        return { dataStatus: "insufficient_data" as const, messages, energyKwh: undefined, averageDailyKwh: undefined };
+      }
+
+      if (result.status === "counter_reset_detected") {
+        messages.push(result.message);
+        return { dataStatus: "counter_reset_detected" as const, messages, energyKwh: undefined, averageDailyKwh: undefined };
+      }
+
+      total += result.delta;
+      if (result.startMode === "after_fallback" || result.endMode === "after_fallback") {
+        messages.push(`Used after-boundary fallback for segment ${segment.start.toISOString()} -> ${segment.end.toISOString()}.`);
+      }
+    }
+
+    const energyKwh = Number(total.toFixed(3));
+    return {
+      dataStatus: "ok" as const,
+      messages,
+      energyKwh,
+      averageDailyKwh: Number((energyKwh / range.dayCount).toFixed(3)),
+    };
+  }
+
+  async getDeviceEnergyAnalytics(
+    identifier: string,
+    options: EnergyRangeOptions,
+  ): Promise<DeviceEnergyAnalyticsSummary | null> {
+    const device = await this.getDeviceHealth(identifier);
+    if (!device) {
+      return null;
+    }
+
+    const site = device.siteId ? await this.sites.findOne({ siteId: device.siteId }) : null;
+    const siteTimezone = site?.timezone || DEFAULT_SITE_TIMEZONE;
+    const now = new Date();
+    const range = "preset" in options
+      ? resolveEnergyPresetRange(options.preset, now, siteTimezone)
+      : resolveCustomDateRange(options.startDate, options.endDate, siteTimezone);
+
+    const [sampleCount, computed] = await Promise.all([
+      this.telemetry.countDocuments({ serialNumber: device.serialNumber, timestamp: { $gte: range.rangeStart, $lt: range.rangeEnd } }),
+      this.computeEnergyForRange(device.serialNumber, range, siteTimezone),
+    ]);
+
+    const messages = [...computed.messages];
+
+    if (!site?.timezone) {
+      messages.push(`Site timezone is missing, so analytics used the fallback timezone ${DEFAULT_SITE_TIMEZONE}.`);
+    }
+
+    return {
+      serialNumber: device.serialNumber,
+      deviceId: device.deviceId,
+      displayName: device.displayName,
+      tenantId: device.tenantId,
+      siteId: device.siteId,
+      siteTimezone,
+      rangeStart: range.rangeStart,
+      rangeEnd: range.rangeEnd,
+      preset: "preset" in options ? options.preset : undefined,
+      requestedStartDate: "startDate" in options ? options.startDate : undefined,
+      requestedEndDate: "endDate" in options ? options.endDate : undefined,
+      dayCount: range.dayCount,
+      energyKwh: computed.energyKwh,
+      averageDailyKwh: computed.averageDailyKwh,
+      sampleCount,
+      dataStatus: computed.dataStatus,
       messages,
     };
   }
@@ -1729,6 +2051,7 @@ export class MongoService {
 
   private async ensureIndexes(): Promise<void> {
     await this.telemetry.createIndex({ deviceId: 1, timestamp: -1 });
+    await this.telemetry.createIndex({ serialNumber: 1, timestamp: -1 });
     await this.devices.createIndex({ serialNumber: 1 }, { unique: true });
     await this.devices.createIndex({ deviceId: 1 });
     await this.devices.createIndex({ macAddress: 1 });

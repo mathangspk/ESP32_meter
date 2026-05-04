@@ -11,6 +11,16 @@ import { firmwareReleaseRequestSchema } from "./types";
 import { otaCommandRequestSchema } from "./types";
 import { otaReleaseRequestSchema } from "./types";
 
+const energyAnalyticsPresets = new Set([
+  "today",
+  "yesterday",
+  "last_7_days",
+  "this_week",
+  "last_week",
+  "this_month",
+  "last_month",
+]);
+
 export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
   const app = express();
   app.use(express.json());
@@ -89,6 +99,43 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
     }
 
     res.json(summary);
+  });
+
+  app.get("/devices/:deviceId/analytics/energy", async (req, res) => {
+    const preset = Array.isArray(req.query.preset) ? req.query.preset[0] : req.query.preset;
+    const startDate = Array.isArray(req.query.startDate) ? req.query.startDate[0] : req.query.startDate;
+    const endDate = Array.isArray(req.query.endDate) ? req.query.endDate[0] : req.query.endDate;
+
+    try {
+      if (!preset && !(startDate && endDate)) {
+        res.status(400).json({ error: "preset or startDate/endDate is required" });
+        return;
+      }
+
+      if (preset && !energyAnalyticsPresets.has(String(preset))) {
+        res.status(400).json({ error: "Invalid preset" });
+        return;
+      }
+
+      const summary = preset
+        ? await mongoService.getDeviceEnergyAnalytics(req.params.deviceId, {
+            preset: String(preset) as "today" | "yesterday" | "last_7_days" | "this_week" | "last_week" | "this_month" | "last_month",
+          })
+        : await mongoService.getDeviceEnergyAnalytics(req.params.deviceId, {
+            startDate: String(startDate),
+            endDate: String(endDate),
+          });
+
+      if (!summary) {
+        res.status(404).json({ error: "Device not found" });
+        return;
+      }
+
+      res.json(summary);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to get device energy analytics";
+      res.status(400).json({ error: message });
+    }
   });
 
   app.post("/devices/claim", async (req, res) => {

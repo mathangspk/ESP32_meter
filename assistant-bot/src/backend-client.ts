@@ -129,6 +129,26 @@ const deviceAnalyticsSummarySchema = z.object({
   messages: z.array(z.string()),
 });
 
+const deviceEnergyAnalyticsSummarySchema = z.object({
+  serialNumber: z.string(),
+  deviceId: z.string(),
+  displayName: z.string().optional(),
+  tenantId: z.string().optional(),
+  siteId: z.string().optional(),
+  siteTimezone: z.string(),
+  rangeStart: z.string(),
+  rangeEnd: z.string(),
+  preset: z.enum(["today", "yesterday", "last_7_days", "this_week", "last_week", "this_month", "last_month"]).optional(),
+  requestedStartDate: z.string().optional(),
+  requestedEndDate: z.string().optional(),
+  dayCount: z.number(),
+  energyKwh: z.number().optional(),
+  averageDailyKwh: z.number().optional(),
+  sampleCount: z.number(),
+  dataStatus: z.enum(["ok", "insufficient_data", "counter_reset_detected"]),
+  messages: z.array(z.string()),
+});
+
 const firmwareReleaseSchema = z
   .object({
     releaseId: z.string(),
@@ -250,6 +270,22 @@ export const backendClient = {
 
   getDeviceAnalyticsSummary: (identifier: string) =>
     request(`/devices/${encodeURIComponent(identifier)}/analytics/summary`, { method: "GET" }, deviceAnalyticsSummarySchema),
+
+  getDeviceEnergyAnalytics: (
+    identifier: string,
+    query:
+      | { preset: "today" | "yesterday" | "last_7_days" | "this_week" | "last_week" | "this_month" | "last_month" }
+      | { startDate: string; endDate: string },
+  ) =>
+    request(
+      `/devices/${encodeURIComponent(identifier)}/analytics/energy?${
+        "preset" in query
+          ? `preset=${encodeURIComponent(query.preset)}`
+          : `startDate=${encodeURIComponent(query.startDate)}&endDate=${encodeURIComponent(query.endDate)}`
+      }`,
+      { method: "GET" },
+      deviceEnergyAnalyticsSummarySchema,
+    ),
 
   getFleetSummary: () => request("/admin/fleet/summary", { method: "GET" }, fleetSummarySchema),
 
