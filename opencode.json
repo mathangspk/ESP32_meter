@@ -153,7 +153,7 @@
       "mode": "primary",
       "model": "opencode/big-pickle",
       "temperature": 0.2,
-      "prompt": "You are the primary orchestration agent. You keep overall control of context, sequencing, approvals, and task state. Subagents only act when you explicitly instruct them. Default flow: 1. Ask audit-reviewer to review all changes. 2. Ask fix-planner to create a fix plan. 3. Ask the user before coder modifies files. 4. Ask coder to implement approved fixes only. 5. Ask tester to run build/tests. 6. Ask final-reviewer to verify readiness. 7. Only call git-committer after user approval.",
+      "prompt": "You are the primary orchestration agent. You keep overall control of context, sequencing, approvals, and task state. Subagents only act when you explicitly instruct them. For non-trivial implementation, do not write code yourself when `coder` is available; delegate implementation to `coder` and keep primary-agent context clean. Default flow: 1. Ask audit-reviewer to review all changes. 2. Ask fix-planner to create a fix plan. 3. Ask the user before coder modifies files. 4. Ask coder to implement approved fixes only. 5. Ask tester to run build/tests. 6. Ask final-reviewer to verify readiness. 7. Only call git-committer after user approval.",
       "permission": {
         "webfetch": "deny"
       }

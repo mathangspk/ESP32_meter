@@ -17,6 +17,7 @@ Use for non-trivial work, dirty worktrees, or multi-session tasks.
 
 - Review before code.
 - Implementation agent does not approve its own work.
+- Non-trivial code implementation goes through `coder` when runtime exposes it.
 - Subagents only act on explicit instructions from primary agent.
 - Subagents do not self-continue into later phases.
 - Primary agent keeps context, sequencing, approvals, and final decisions.

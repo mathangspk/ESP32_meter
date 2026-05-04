@@ -77,7 +77,8 @@ Do not skip straight to Delivery for non-trivial work unless scope is already ob
 - Subagents do not self-initiate, expand scope, or continue into follow-up phases unless primary agent explicitly asks.
 - Subagents must return control to primary agent after finishing assigned contract.
 - Primary agent remains source of truth for overall context and final decisions.
-- Main agent may skip delegation only when scope is fully known and work is trivially local.
+- For non-trivial implementation, primary agent should delegate code writing to `coder` so primary agent can preserve context and control.
+- Primary agent should implement code directly only when work is trivially local or runtime does not expose `coder`.
 
 Preferred use:
 
@@ -101,6 +102,13 @@ Fallback mapping when runtime does not expose custom review-gate subagents:
 - `git-committer` -> `ops-light` or main agent
 
 Use `explore` before non-trivial firmware+backend+bot work if path is not already fully known.
+
+Implementation rule:
+
+- Primary agent audits, plans, approves, sequences, and reviews.
+- `coder` writes implementation for non-trivial code changes.
+- `tester` runs checks after implementation.
+- `final-reviewer` or `general` reviews implementation before user testing when scope is non-trivial.
 
 ## Subagent Contract
 
