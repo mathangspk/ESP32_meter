@@ -3,7 +3,7 @@ import { backendClient, Membership } from "./backend-client";
 import { config } from "./config";
 import { askGroq, parseAnalyticsIntent, parseInventoryIntent, renderAnalyticsAnswer } from "./groq";
 import { logger } from "./logger";
-import { getUpdates, sendMessage, TelegramUpdate } from "./telegram";
+import { getUpdates, sendMessage as sendTelegramMessage, TelegramUpdate } from "./telegram";
 
 type PendingState =
   | {
@@ -56,6 +56,24 @@ type PendingState =
 const telegramEnabled = !config.TELEGRAM_BOT_TOKEN.includes("placeholder");
 
 type ActivePendingState = Exclude<PendingState, undefined>;
+
+function previewText(value: string, maxLength = 240) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength)}...`;
+}
+
+async function sendMessage(chatId: string | number, text: string): Promise<void> {
+  logger.info(
+    {
+      event: "telegram.outbound",
+      chatId: String(chatId),
+      textPreview: previewText(text),
+      textLength: text.length,
+    },
+    "Sending Telegram message",
+  );
+  await sendTelegramMessage(chatId, text);
+}
 
 async function getPendingState(chatId: number): Promise<PendingState> {
   const session = await backendClient.getBotSession(chatId);
@@ -330,6 +348,20 @@ async function handleAnalyticsQuestion(chatId: number, text: string, user: { use
     return false;
   }
 
+  logger.info(
+    {
+      event: "telegram.analytics_intent",
+      chatId,
+      userId: user.userId,
+      intent: intent.intent,
+      identifier: intent.identifier,
+      startDate: intent.startDate,
+      endDate: intent.endDate,
+      textPreview: previewText(text),
+    },
+    "Parsed analytics intent",
+  );
+
   const { devices, device } = await resolveAccessibleDevice(intent.identifier, user, memberships);
   if (devices.length === 0) {
     await sendMessage(chatId, "Khong tim thay thiet bi nao trong pham vi ban co quyen xem.");
@@ -345,6 +377,20 @@ async function handleAnalyticsQuestion(chatId: number, text: string, user: { use
     );
     return true;
   }
+
+  logger.info(
+    {
+      event: "telegram.analytics_resolved_device",
+      chatId,
+      userId: user.userId,
+      intent: intent.intent,
+      requestedIdentifier: intent.identifier,
+      resolvedDeviceId: device.deviceId,
+      resolvedSerialNumber: device.serialNumber,
+      resolvedDisplayName: device.displayName,
+    },
+    "Resolved device for analytics question",
+  );
 
   if (isEnergyRangeIntent(intent.intent)) {
     const energyQuery = toEnergyQuery(intent);
@@ -402,6 +448,42 @@ function looksLikeFirmwareVersionQuestion(question: string): boolean {
     text.includes("firmware") ||
     text.includes("version")
   );
+}
+
+function parseFirmwareQuestionIdentifier(question: string): string | undefined {
+  const explicitIdentifier = parseDeviceDetailIdentifier(question);
+  if (explicitIdentifier) {
+    return explicitIdentifier;
+  }
+
+  const text = normalizeVietnameseText(question);
+  const patterns = [
+    /^(?:phien ban firmware|phien ban hien tai cua|firmware cua)\s+(.+?)(?:\s+co can nang cap khong|\s+la bao nhieu|\s+la gi|\?|$)/,
+    /^(.+?)\s+(?:dang chay firmware nao|co can nang cap khong)$/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const candidate = match?.[1]?.trim();
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return parseDeviceDetailReference(question);
+}
+
+function asksLatestAvailableFirmware(question: string): boolean {
+  const text = normalizeVietnameseText(question);
+  return (
+    (text.includes("moi nhat") || text.includes("latest")) &&
+    (text.includes("tren he thong") || text.includes("server") || text.includes("release") || text.includes("firmware"))
+  );
+}
+
+function asksFirmwareUpgradeNeed(question: string): boolean {
+  const text = normalizeVietnameseText(question);
+  return text.includes("co can nang cap khong") || text.includes("can nang cap khong") || text.includes("co update khong");
 }
 
 function parseNaturalLanguageDeviceAction(question: string):
@@ -494,8 +576,43 @@ async function handleFirmwareVersionQuestion(chatId: number, text: string, user:
     return false;
   }
 
-  const explicitIdentifier = parseDeviceDetailIdentifier(text);
-  const identifier = explicitIdentifier ?? text;
+  const identifier = parseFirmwareQuestionIdentifier(text);
+  const asksLatest = asksLatestAvailableFirmware(text);
+  const asksUpgrade = asksFirmwareUpgradeNeed(text);
+  logger.info(
+    {
+      event: "telegram.firmware_question",
+      chatId,
+      userId: user.userId,
+      identifier,
+      asksLatest,
+      asksUpgrade,
+      textPreview: previewText(text),
+    },
+    "Parsed firmware question",
+  );
+
+  if (!identifier && asksLatest) {
+    try {
+      const releases = await backendClient.getFirmwareReleases(1);
+      const latest = releases[0];
+      if (!latest) {
+        await sendMessage(chatId, "Hien he thong chua co firmware release nao trong catalog.");
+        return true;
+      }
+
+      await sendMessage(
+        chatId,
+        `Firmware moi nhat tren he thong hien la ${latest.version}. Support ${latest.supportStatus}. Muc do ${latest.severity}.`,
+      );
+      return true;
+    } catch (error) {
+      logger.error({ err: error, chatId, userId: user.userId }, "Failed to answer latest firmware release question");
+      await sendMessage(chatId, "Minh chua lay duoc firmware moi nhat tu he thong luc nay.");
+      return true;
+    }
+  }
+
   const { devices, device } = await resolveAccessibleDevice(identifier, user, memberships);
   if (devices.length === 0) {
     await sendMessage(chatId, "Khong tim thay thiet bi nao trong pham vi ban co quyen xem.");
@@ -505,9 +622,33 @@ async function handleFirmwareVersionQuestion(chatId: number, text: string, user:
   if (!device) {
     await sendMessage(
       chatId,
-      explicitIdentifier
+      identifier
         ? "Minh chua xac dinh duoc chinh xac thiet bi ban muon hoi firmware. Hay gui lai serial, device ID, hoac ten thiet bi dung hon."
         : `Ban muon hoi firmware cua thiet bi nao? Hien co: ${devices.map((candidate) => candidate.displayName ?? candidate.serialNumber).join(", ")}`,
+    );
+    return true;
+  }
+
+  logger.info(
+    {
+      event: "telegram.firmware_resolved_device",
+      chatId,
+      userId: user.userId,
+      requestedIdentifier: identifier,
+      resolvedDeviceId: device.deviceId,
+      resolvedSerialNumber: device.serialNumber,
+      resolvedDisplayName: device.displayName,
+    },
+    "Resolved device for firmware question",
+  );
+
+  if (asksLatest || asksUpgrade) {
+    const policy = await backendClient.getFirmwarePolicy(device.serialNumber);
+    const latestVersion = policy.latestVersion ?? "khong ro";
+    const updateAnswer = policy.updateAvailable ? "co" : "khong";
+    await sendMessage(
+      chatId,
+      `${device.displayName ?? device.serialNumber}: firmware hien tai la ${policy.currentVersion ?? "khong ro"}. Firmware moi nhat phu hop la ${latestVersion}. Can nang cap: ${updateAnswer}.`,
     );
     return true;
   }
@@ -1227,6 +1368,22 @@ async function processMessage(update: TelegramUpdate): Promise<void> {
   const chatId = message.chat.id;
   const text = message.text.trim();
   const displayName = [message.from.first_name, message.from.last_name].filter(Boolean).join(" ") || message.from.username;
+  const pendingState = await getPendingState(chatId);
+
+  logger.info(
+    {
+      event: "telegram.inbound",
+      updateId: update.update_id,
+      chatId,
+      fromId: message.from.id,
+      username: message.from.username,
+      displayName,
+      pendingKind: pendingState?.kind,
+      textPreview: previewText(text),
+      textLength: text.length,
+    },
+    "Received Telegram message",
+  );
 
   if (await handleDefaultTenantSelection(chatId, text)) {
     return;

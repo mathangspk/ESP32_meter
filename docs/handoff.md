@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Review release-candidate readiness after OTA hardening, Wi-Fi-loss testing, and clean RC promotion.
+Validate Telegram energy analytics on production bot after switching backend math to boundary-based counter snapshots.
 
 ## Current BMAD Phase
 
@@ -13,15 +13,39 @@ Review
 - Brief and handoff updates: `gpt mini`
 - Mapping and repo exploration: `Minimax M2.5 free`
 - Code changes: `gpt-5.3 codex`
-- MQTT and OTA debugging plus final review: `gpt-5.4`
+- Final review: `gpt-5.4` via `final-reviewer`
+- MQTT, OTA, and production-debug review: `gpt-5.4`
 
 ## Escalation Trigger
 
-Escalate to `gpt-5.4` as soon as the next step depends on MQTT reconnect timing, OTA runtime state, or a firmware-versus-infra root-cause decision.
+Escalate to `gpt-5.4` as soon as the next step depends on boundary telemetry gaps, counter-reset suspicion, MQTT reconnect timing, OTA runtime state, or a firmware-versus-infra root-cause decision.
 
 ## Scorecard Reminder
 
 After this non-trivial session, append a short entry to `docs/bmad-scorecard.md`.
+
+## Latest Verified Milestone
+
+- Policy routing is now explicit that non-trivial implementation should go through `coder` when available, while `final-reviewer` is pinned to `openai/gpt-5.4` in `opencode.json`.
+- Policy commits pushed:
+  - `2639f0b` `chore: simplify agent policy`
+  - `419d01d` `chore: tighten agent delegation policy`
+- Analytics fix pushed:
+  - `2f1bc2b` `fix: correct Telegram energy analytics`
+- Production backend analytics now use boundary-based counter snapshots instead of naive first-sample/last-sample delta.
+- Boundary rule now enforced:
+  - prefer latest valid telemetry `<= boundary`
+  - fallback to earliest valid telemetry `> boundary` only within `5` minutes
+  - otherwise fail hard with `insufficient_data`
+- Invalid PZEM telemetry is filtered from boundary math with `voltage > 50`.
+- `telemetry` now has Mongo index `{ serialNumber: 1, timestamp: -1 }` in addition to `{ deviceId: 1, timestamp: -1 }`.
+- Live production verify after deploy:
+  - `GET /healthz` => `status=ok`
+  - `GET /devices/7B34E3EC/analytics/energy?preset=today` => `dataStatus=ok`, `energyKwh` around `10 kWh`
+  - `GET /devices/7B34E3EC/analytics/energy?preset=last_7_days` => `dataStatus=insufficient_data` when boundary evidence is not reliable enough
+- Current production bot wording examples:
+  - `nhaba: hom nay tu 00:00 den hien tai da dung 10.026 kWh. Mui gio Asia/Ho_Chi_Minh.`
+  - `nhaba: chua du du lieu tin cay de tinh dien nang cho 7 ngay qua. Mui gio Asia/Ho_Chi_Minh.`
 
 ## Confirmed State
 
@@ -227,9 +251,17 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 
 ## Next Recommended Steps
 
-1. Flash one test device with this identity-persistence patch and verify first boot generates both unique `device_id` and `serial_number` directly from MAC when no config exists.
-2. Verify `factory reset` preserves that generated or assigned identity while still clearing Wi-Fi settings.
-3. Decide whether serial numbers should stay MAC-derived by default or move to a manufacturing-time provisioning flow before scaling device count.
+1. Run Telegram user testing on production bot with these 4 questions:
+   - `hôm nay nhà ba dùng bao nhiêu điện`
+   - `tháng này nhà ba dùng bao nhiêu điện`
+   - `từ ngày 1/5 đến 3/5 nhà ba dùng bao nhiêu điện`
+   - `7 ngày qua nhà ba dùng bao nhiêu điện`
+2. Compare each Telegram reply with backend production endpoints:
+   - `GET /devices/7B34E3EC/analytics/energy?preset=today`
+   - `GET /devices/7B34E3EC/analytics/energy?preset=this_month`
+   - `GET /devices/7B34E3EC/analytics/energy?startDate=2026-05-01&endDate=2026-05-03`
+   - `GET /devices/7B34E3EC/analytics/energy?preset=last_7_days`
+3. If user wants `7 ngày qua` to always return a number, decide whether to relax fail-hard boundary policy or redefine query semantics.
 
 ## Known Constraints
 
@@ -251,6 +283,7 @@ PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 - Mid-transfer server drop originally left OTA stuck in `downloading`; firmware now has a 45-second OTA watchdog that converts that hang into a final `failed` status while keeping the old firmware running
 - Deferred OTA status publish now queues status locally when MQTT is disconnected and flushes it after reconnect
 - Debug-only VPS firmware hosting is now kept as on-demand scripts and artifact directory; it is not exposed publicly unless explicitly started for a test
+- Energy analytics now fail hard when a boundary snapshot is missing by more than `5` minutes; this is intentional and currently affects some `last_7_days` and `last_week` results.
 
 ## Most Relevant Commands
 
