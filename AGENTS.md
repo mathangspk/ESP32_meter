@@ -219,3 +219,17 @@ After each verified milestone, update `docs/handoff.md` with:
 - current BMAD phase
 - recommended model lane
 - escalation trigger if next step gets stuck
+
+## Compact Rule
+
+When context compaction is needed, do not restate full project history.
+
+Use this order:
+
+1. Point next agent to `PROJECT_CONTEXT.md`, `docs/handoff.md`, and latest git commits as stable source of truth.
+2. Summarize only delta since the last `docs/handoff.md` update or last compact.
+3. Include only active task, files changed in current session, uncommitted changes, verification done, blockers, and exact next step.
+4. Do not repeat long confirmed-state/history lists already stored in docs unless they changed.
+5. If stable docs are stale, update `docs/handoff.md` first, then compact with a short delta.
+
+Target compact size: under 2,000 tokens unless user explicitly asks for full archive.
