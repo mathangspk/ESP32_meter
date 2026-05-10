@@ -1,186 +1,100 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/big-pickle",
+  "default_agent": "orchestrator",
   "agent": {
-    "explore": {
-      "description": "Explores code and maps read-only VPS/runtime state.",
-      "mode": "subagent",
-      "model": "opencode/big-pickle",
-      "temperature": 0.1
-    },
-    "general": {
-      "description": "Runs broader read-only review and production verification work when the runtime only exposes built-in subagent types.",
-      "mode": "subagent",
-      "model": "opencode/big-pickle",
-      "temperature": 0.1,
-      "prompt": "You are a general-purpose subagent for this repository. You act only on explicit instructions from the primary agent and never self-initiate follow-up work. When asked to do post-deploy or VPS verification, prefer read-only operational checks: health endpoints, docker container state, broker connectivity, device ingest evidence, and concise blocker reporting. Do not modify files, restart services, deploy images, or change runtime state unless the parent task explicitly requests that. Return exact evidence and the next safe action, then stop and return control to the primary agent."
-    },
-    "ops-light": {
-      "description": "Handles simple Git housekeeping such as status, diff, add, commit, and push.",
-      "mode": "subagent",
-      "model": "opencode/big-pickle",
-      "temperature": 0.1,
-      "permission": {
-        "edit": "deny",
-        "webfetch": "deny",
-        "bash": {
-          "*": "deny",
-          "git status*": "allow",
-          "git diff*": "allow",
-          "git log*": "allow",
-          "git add *": "allow",
-          "git commit *": "allow",
-          "git push": "allow",
-          "git push *": "allow"
-        }
-      }
-    },
-    "audit-reviewer": {
-      "description": "Reviews current changes after multi-session work. Read-only. No file edits.",
-      "mode": "subagent",
-      "model": "opencode/big-pickle",
-      "temperature": 0.1,
-      "prompt": "You are a strict audit reviewer. You act only on explicit instructions from the primary agent and never self-initiate follow-up work. Review current code changes and runtime-sensitive risks without modifying files. Focus on bugs, unsafe logic, missing error handling, inconsistent naming, unnecessary refactoring, missing tests, and security risks. Return exactly: 1. Summary 2. Critical issues 3. Important issues 4. Minor issues 5. Files that should be checked manually 6. Recommendation: ready to fix / not ready. Then stop and return control to the primary agent.",
-      "permission": {
-        "edit": "deny",
-        "webfetch": "deny",
-        "bash": {
-          "*": "deny",
-          "git status*": "allow",
-          "git diff*": "allow",
-          "git log*": "allow"
-        }
-      }
-    },
-    "fix-planner": {
-      "description": "Converts audit findings into a minimal fix plan. Read-only.",
-      "mode": "subagent",
-      "model": "opencode/big-pickle",
-      "temperature": 0.1,
-      "prompt": "You create a minimal fix plan. You act only on explicit instructions from the primary agent and never self-initiate follow-up work. Do not write code. Do not suggest unrelated refactoring. Group fixes by priority. Each fix must include the target file and reason. Return exactly: 1. Must fix before testing 2. Should fix 3. Can defer 4. Suggested implementation order. Then stop and return control to the primary agent.",
-      "permission": {
-        "edit": "deny",
-        "webfetch": "deny",
-        "bash": {
-          "*": "deny"
-        }
-      }
-    },
-    "coder": {
-      "description": "Implements approved fixes only. No commit or push.",
-      "mode": "subagent",
-      "model": "openai/gpt-5.3-codex",
-      "temperature": 0.1,
-      "prompt": "You are an implementation agent. You act only on explicit instructions from the primary agent and never self-initiate follow-up work. Implement only approved fixes. Keep changes minimal. Do not refactor unrelated code. Do not add dependencies unless explicitly approved. Do not modify tests just to make them pass. Do not commit or push. After editing, report exactly: 1. Files changed 2. What was fixed 3. What was not fixed 4. Risks 5. Suggested test commands. Then stop and return control to the primary agent.",
-      "permission": {
-        "edit": "allow",
-        "webfetch": "deny",
-        "bash": {
-          "*": "deny",
-          "git diff*": "allow",
-          "git status*": "allow",
-          "npm test*": "allow",
-          "npm run test*": "allow",
-          "npm run build*": "allow",
-          "pytest*": "allow",
-          "python -m pytest*": "allow",
-          "pio run*": "allow",
-          "pio test*": "allow"
-        }
-      }
-    },
-    "tester": {
-      "description": "Runs build and tests without editing files.",
-      "mode": "subagent",
-      "model": "opencode/big-pickle",
-      "temperature": 0.1,
-      "prompt": "You are a testing agent. You act only on explicit instructions from the primary agent and never self-initiate follow-up work. Run the requested build and test commands. Do not modify files. Return exactly: 1. Commands executed 2. Result: pass/fail 3. Failure summary 4. Likely root cause 5. Whether it is safe for user testing. Then stop and return control to the primary agent.",
-      "permission": {
-        "edit": "deny",
-        "webfetch": "deny",
-        "bash": {
-          "*": "deny",
-          "npm test*": "allow",
-          "npm run test*": "allow",
-          "npm run build*": "allow",
-          "pytest*": "allow",
-          "python -m pytest*": "allow",
-          "pio run*": "allow",
-          "pio test*": "allow",
-          "curl *": "allow",
-          "ssh *": "allow"
-        }
-      }
-    },
-    "final-reviewer": {
-      "description": "Performs final read-only review after delivery and testing.",
-      "mode": "subagent",
-      "model": "openai/gpt-5.4",
-      "temperature": 0.1,
-      "prompt": "You perform final review after fixes. You act only on explicit instructions from the primary agent and never self-initiate follow-up work. Check whether approved issues were fixed, whether new unrelated changes were introduced, whether code is safe for manual testing, and whether test coverage is acceptable. Return exactly: 1. Ready for user testing: yes/no 2. Remaining risks 3. Manual test checklist. Then stop and return control to the primary agent.",
-      "permission": {
-        "edit": "deny",
-        "webfetch": "deny",
-        "bash": {
-          "*": "deny",
-          "git status*": "allow",
-          "git diff*": "allow"
-        }
-      }
-    },
-    "git-committer": {
-      "description": "Handles git status, commit, and push only after approval.",
-      "mode": "subagent",
-      "model": "opencode/big-pickle",
-      "temperature": 0.1,
-      "prompt": "You handle git housekeeping after verification and explicit approval. You act only on explicit instructions from the primary agent and never self-initiate follow-up work. Return exactly: 1. Git status or diff summary 2. Commit result 3. Push result if requested 4. Blockers. Then stop and return control to the primary agent.",
-      "permission": {
-        "edit": "deny",
-        "webfetch": "deny",
-        "bash": {
-          "*": "deny",
-          "git status*": "allow",
-          "git diff*": "allow",
-          "git log*": "allow",
-          "git add *": "allow",
-          "git commit *": "allow",
-          "git push": "allow",
-          "git push *": "allow"
-        }
-      }
-    },
     "orchestrator": {
-      "description": "Coordinates audit, planning, implementation, testing, and final approval workflow.",
+      "description": "Primary orchestration agent that coordinates specialist agents and keeps context compact.",
       "mode": "primary",
       "model": "opencode/big-pickle",
-      "temperature": 0.2,
-      "prompt": "You are the primary orchestration agent. You keep overall control of context, sequencing, approvals, and task state. Subagents only act when you explicitly instruct them. For non-trivial implementation, do not write code yourself when `coder` is available; delegate implementation to `coder` and keep primary-agent context clean. Default flow: 1. Ask audit-reviewer to review all changes. 2. Ask fix-planner to create a fix plan. 3. Ask the user before coder modifies files. 4. Ask coder to implement approved fixes only. 5. Ask tester to run build/tests. 6. Ask final-reviewer to verify readiness. 7. Only call git-committer after user approval.",
       "permission": {
-        "webfetch": "deny"
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "question": "allow",
+        "task": {
+          "*": "deny",
+          "explore-agent": "allow",
+          "code-agent": "allow",
+          "review-agent": "allow",
+          "qa-agent": "allow",
+          "report-agent": "allow"
+        },
+        "edit": "deny",
+        "bash": "ask",
+        "webfetch": "allow",
+        "todowrite": "allow"
       }
     },
-    "vps-verify": {
-      "description": "Runs read-only post-deploy verification for the VPS stack, device ingest, and production health checks.",
+    "explore-agent": {
+      "description": "Read-only project exploration agent.",
       "mode": "subagent",
       "model": "opencode/big-pickle",
-      "temperature": 0.1,
-      "prompt": "You are a production verification subagent for this repository. You act only on explicit instructions from the primary agent and never self-initiate follow-up work. Focus on read-only checks after local-to-VPS promotion. Verify health endpoints, docker container state, broker connectivity, device ingest evidence, and bot/device API state. Do not modify files, restart services, deploy images, change firewall state, or edit configuration. Return concise operational findings, exact evidence, blockers, and the next safe action, then stop and return control to the primary agent.",
       "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
         "edit": "deny",
-        "webfetch": "deny",
-        "bash": {
-          "*": "deny",
-          "curl *": "allow",
-          "ssh *": "allow",
-          "docker ps*": "allow",
-          "docker logs *": "allow",
-          "docker inspect *": "allow",
-          "docker exec *": "allow",
-          "docker run *": "allow",
-          "docker compose *": "allow",
-          "docker-compose *": "allow",
-          "python3 *": "allow",
-          "ls *": "allow"
-        }
+        "bash": "ask",
+        "webfetch": "allow"
+      }
+    },
+    "code-agent": {
+      "description": "Implementation agent for scoped code changes.",
+      "mode": "subagent",
+      "model": "opencode/big-pickle",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow"
+      }
+    },
+    "review-agent": {
+      "description": "Code and architecture review agent with no edit permissions.",
+      "mode": "subagent",
+      "model": "opencode/big-pickle",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "ask",
+        "webfetch": "allow"
+      }
+    },
+    "qa-agent": {
+      "description": "Report-only QA agent for validation and regression assessment.",
+      "mode": "subagent",
+      "model": "opencode/big-pickle",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "ask",
+        "webfetch": "allow"
+      }
+    },
+    "report-agent": {
+      "description": "Weekly reporting agent for Jira and Notion drafts.",
+      "mode": "subagent",
+      "model": "opencode/big-pickle",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "ask",
+        "webfetch": "allow"
       }
     }
   }
