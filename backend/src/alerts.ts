@@ -3,6 +3,8 @@ import { logger } from "./logger";
 import { AlertEventRecord, DeviceStateRecord, mongoService } from "./mongodb";
 import { TelemetryPayload } from "./types";
 
+const OFFLINE_ALERT_DELAY_MS = 2 * 60 * 1000;
+
 function formatOfflineMessage(device: DeviceStateRecord): string {
   return [
     "[ALERT] Device offline",
@@ -33,45 +35,60 @@ export async function handleTelemetryAlertTransitions(
   payload: TelemetryPayload,
   previousState: DeviceStateRecord | null,
 ): Promise<void> {
-  if (!previousState?.isOffline) {
+  // Device came back after alert was sent → send RECOVERED
+  if (previousState?.isOffline) {
+    const sentAt = new Date();
+    const message = formatRecoveredMessage(payload);
+
+    try {
+      await mongoService.enqueueTelegramNotification("device.recovered", message, {
+        deviceId: payload.device_id,
+        serialNumber: payload.serial_number,
+        event: "recovered",
+      });
+      await mongoService.markRecovered(payload.device_id, sentAt);
+      await persistAlert({
+        deviceId: payload.device_id,
+        serialNumber: payload.serial_number,
+        type: "recovered",
+        message,
+        sentAt,
+        status: "queued",
+      });
+    } catch (error) {
+      logger.error({ err: error, deviceId: payload.device_id }, "Failed to queue recovered alert");
+      await mongoService.markRecovered(payload.device_id, sentAt);
+      await persistAlert({
+        deviceId: payload.device_id,
+        serialNumber: payload.serial_number,
+        type: "recovered",
+        message,
+        sentAt,
+        status: "failed",
+      });
+    }
     return;
   }
 
-  const sentAt = new Date();
-  const message = formatRecoveredMessage(payload);
-
-  try {
-    await mongoService.enqueueTelegramNotification("device.recovered", message, {
-      deviceId: payload.device_id,
-      serialNumber: payload.serial_number,
-      event: "recovered",
-    });
-    await mongoService.markRecovered(payload.device_id, sentAt);
-    await persistAlert({
-      deviceId: payload.device_id,
-      serialNumber: payload.serial_number,
-      type: "recovered",
-      message,
-      sentAt,
-      status: "queued",
-    });
-  } catch (error) {
-    logger.error({ err: error, deviceId: payload.device_id }, "Failed to queue recovered alert");
-    await mongoService.markRecovered(payload.device_id, sentAt);
-    await persistAlert({
-      deviceId: payload.device_id,
-      serialNumber: payload.serial_number,
-      type: "recovered",
-      message,
-      sentAt,
-      status: "failed",
-    });
+  // Device came back before 2-min alert window → clear pending state silently
+  if (previousState?.offlineSince) {
+    logger.info(
+      { deviceId: payload.device_id, offlineSince: previousState.offlineSince },
+      "Device recovered before offline alert threshold — no notification sent",
+    );
+    await mongoService.clearOfflinePending(payload.device_id);
   }
 }
 
 export async function checkOfflineDevices(): Promise<void> {
-  const cutoff = new Date(Date.now() - config.OFFLINE_TIMEOUT_SECONDS * 1000);
-  const devices = await mongoService.getDevicesToMarkOffline(cutoff);
+  const detectionCutoff = new Date(Date.now() - config.OFFLINE_TIMEOUT_SECONDS * 1000);
+  const alertCutoff = new Date(Date.now() - config.OFFLINE_TIMEOUT_SECONDS * 1000 - OFFLINE_ALERT_DELAY_MS);
+
+  // Phase 1: stamp newly-silent devices with offlineSince (no alert yet)
+  await mongoService.markOfflinePending(detectionCutoff);
+
+  // Phase 2: alert devices that have been pending for 2+ minutes
+  const devices = await mongoService.getDevicesToAlert(alertCutoff);
 
   for (const device of devices) {
     const sentAt = new Date();

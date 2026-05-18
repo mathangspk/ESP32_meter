@@ -158,6 +158,7 @@ export type DeviceStateRecord = {
   lastSeenAt: Date;
   lastTelemetryAt: Date;
   isOffline: boolean;
+  offlineSince?: Date;
   lastOfflineAlertAt?: Date;
   lastRecoveredAlertAt?: Date;
   lastVoltage: number;
@@ -226,6 +227,26 @@ export type OtaStatusEventRecord = {
   targetVersion: string;
   timestamp: Date;
   receivedAt: Date;
+};
+
+export type TelemetryHourlyRecord = {
+  serialNumber: string;
+  deviceId: string;
+  hourStart: Date;
+  firstEnergy: number;
+  lastEnergy: number;
+  energyKwh?: number;
+  counterReset: boolean;
+  avgPower: number;
+  maxPower: number;
+  avgVoltage: number;
+  minVoltage: number;
+  maxVoltage: number;
+  avgCurrent: number;
+  sampleCount: number;
+  firstTimestamp: Date;
+  lastTimestamp: Date;
+  aggregatedAt: Date;
 };
 
 export type NotificationQueueRecord = {
@@ -333,7 +354,7 @@ type EnergyRangeOptions = { preset: EnergyAnalyticsPreset } | { startDate: strin
 type BoundaryTelemetrySnapshot = Pick<TelemetryRecord, "timestamp" | "energy" | "voltage" | "current" | "power">;
 
 type BoundaryResolution =
-  | { status: "ok"; sample: BoundaryTelemetrySnapshot; mode: "at_or_before" | "after_fallback" }
+  | { status: "ok"; sample: BoundaryTelemetrySnapshot; mode: "at_or_before" | "after_fallback" | "hourly_fallback" }
   | { status: "missing"; reason: string };
 
 const DEFAULT_SITE_TIMEZONE = "Asia/Ho_Chi_Minh";
@@ -562,6 +583,7 @@ export class MongoService {
   private notificationQueue!: Collection<NotificationQueueRecord>;
   private firmwareReleases!: Collection<FirmwareReleaseRecord>;
   private botSessions!: Collection<BotSessionRecord>;
+  private telemetryHourly!: Collection<TelemetryHourlyRecord>;
 
   async connect(): Promise<void> {
     await this.client.connect();
@@ -583,6 +605,7 @@ export class MongoService {
     this.notificationQueue = this.db.collection<NotificationQueueRecord>("notification_queue");
     this.firmwareReleases = this.db.collection<FirmwareReleaseRecord>("firmware_releases");
     this.botSessions = this.db.collection<BotSessionRecord>("bot_sessions");
+    this.telemetryHourly = this.db.collection<TelemetryHourlyRecord>("telemetry_hourly");
     await this.ensureIndexes();
     await this.bootstrapPlatformAdmin();
     await this.bootstrapFirmwareRelease();
@@ -644,12 +667,24 @@ export class MongoService {
     await this.deviceStates.updateOne(
       { deviceId },
       {
-        $set: {
-          isOffline: false,
-          lastRecoveredAlertAt: sentAt,
-          updatedAt: sentAt,
-        },
+        $set: { isOffline: false, lastRecoveredAlertAt: sentAt, updatedAt: sentAt },
+        $unset: { offlineSince: "" },
       },
+    );
+  }
+
+  async clearOfflinePending(deviceId: string): Promise<void> {
+    await this.deviceStates.updateOne(
+      { deviceId },
+      { $unset: { offlineSince: "" }, $set: { updatedAt: new Date() } },
+    );
+  }
+
+  async markOfflinePending(detectionCutoff: Date): Promise<void> {
+    const now = new Date();
+    await this.deviceStates.updateMany(
+      { isOffline: false, offlineSince: { $exists: false }, lastSeenAt: { $lt: detectionCutoff } },
+      { $set: { offlineSince: now, updatedAt: now } },
     );
   }
 
@@ -657,20 +692,16 @@ export class MongoService {
     await this.deviceStates.updateOne(
       { deviceId },
       {
-        $set: {
-          isOffline: true,
-          lastOfflineAlertAt: sentAt,
-          updatedAt: sentAt,
-        },
+        $set: { isOffline: true, lastOfflineAlertAt: sentAt, updatedAt: sentAt },
       },
     );
   }
 
-  async getDevicesToMarkOffline(cutoff: Date): Promise<DeviceStateRecord[]> {
+  async getDevicesToAlert(alertCutoff: Date): Promise<DeviceStateRecord[]> {
     return this.deviceStates
       .find({
         isOffline: false,
-        lastSeenAt: { $lt: cutoff },
+        offlineSince: { $exists: true, $lt: alertCutoff },
       })
       .toArray();
   }
@@ -826,7 +857,10 @@ export class MongoService {
 
   async getPendingNotifications(limit = 50): Promise<NotificationQueueRecord[]> {
     return this.notificationQueue
-      .find({ status: "pending" }, { sort: { createdAt: 1 }, limit })
+      .find(
+        { $or: [{ status: "pending" }, { status: "failed", attemptCount: { $lt: 3 } }] },
+        { sort: { createdAt: 1 }, limit },
+      )
       .toArray();
   }
 
@@ -1080,6 +1114,11 @@ export class MongoService {
       return { status: "ok", sample: afterSample, mode: "after_fallback" };
     }
 
+    const hourlySample = await this.getHourlyBoundary(serialNumber, boundary);
+    if (hourlySample) {
+      return { status: "ok", sample: hourlySample, mode: "hourly_fallback" };
+    }
+
     return {
       status: "missing",
       reason: `Missing valid telemetry within ${Math.floor(BOUNDARY_MAX_GAP_MS / 60000)} minutes of boundary ${boundary.toISOString()}.`,
@@ -1121,8 +1160,12 @@ export class MongoService {
 
     let total = 0;
     const messages: string[] = [];
-    for (const segment of segments) {
-      const result = await this.computeEnergyDeltaForSegment(serialNumber, segment.start, segment.end);
+    const segmentResults = await Promise.all(
+      segments.map((segment) => this.computeEnergyDeltaForSegment(serialNumber, segment.start, segment.end)),
+    );
+
+    for (const [i, result] of segmentResults.entries()) {
+      const segment = segments[i];
       if (result.status === "insufficient_data") {
         messages.push(result.message);
         return { dataStatus: "insufficient_data" as const, messages, energyKwh: undefined, averageDailyKwh: undefined };
@@ -1136,6 +1179,9 @@ export class MongoService {
       total += result.delta;
       if (result.startMode === "after_fallback" || result.endMode === "after_fallback") {
         messages.push(`Used after-boundary fallback for segment ${segment.start.toISOString()} -> ${segment.end.toISOString()}.`);
+      }
+      if (result.startMode === "hourly_fallback" || result.endMode === "hourly_fallback") {
+        messages.push(`Used hourly aggregate boundary for segment ${segment.start.toISOString()} -> ${segment.end.toISOString()}.`);
       }
     }
 
@@ -2049,6 +2095,166 @@ export class MongoService {
     );
   }
 
+  async getDeviceSerialNumbers(): Promise<Array<{ serialNumber: string; deviceId: string }>> {
+    const docs = await this.devices
+      .find({}, { projection: { _id: 0, serialNumber: 1, deviceId: 1 } })
+      .toArray();
+    return docs.map((doc) => ({ serialNumber: doc.serialNumber, deviceId: doc.deviceId }));
+  }
+
+  async rollupTelemetryForDevice(
+    serialNumber: string,
+    deviceId: string,
+    startHour: Date,
+    endHour: Date,
+  ): Promise<{ hoursProcessed: number; hoursSkipped: number }> {
+    const HOUR_MS = 60 * 60 * 1000;
+    const start = new Date(Math.floor(startHour.getTime() / HOUR_MS) * HOUR_MS);
+    const end = new Date(Math.floor(endHour.getTime() / HOUR_MS) * HOUR_MS);
+
+    const existing = await this.telemetryHourly
+      .find({ serialNumber, hourStart: { $gte: start, $lt: end } }, { projection: { _id: 0, hourStart: 1 } })
+      .toArray();
+    const existingSet = new Set(existing.map((r) => r.hourStart.getTime()));
+
+    let hoursProcessed = 0;
+    let hoursSkipped = 0;
+    let cursor = start;
+
+    while (cursor < end) {
+      if (existingSet.has(cursor.getTime())) {
+        hoursSkipped++;
+      } else {
+        const processed = await this.rollupOneHour(serialNumber, deviceId, cursor);
+        if (processed) hoursProcessed++;
+      }
+      cursor = new Date(cursor.getTime() + HOUR_MS);
+    }
+
+    return { hoursProcessed, hoursSkipped };
+  }
+
+  private async rollupOneHour(serialNumber: string, deviceId: string, hourStart: Date): Promise<boolean> {
+    const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
+
+    type HourAgg = {
+      firstEnergy: number;
+      lastEnergy: number;
+      firstTimestamp: Date;
+      lastTimestamp: Date;
+      avgPower: number;
+      maxPower: number;
+      avgVoltage: number;
+      minVoltage: number;
+      maxVoltage: number;
+      avgCurrent: number;
+      sampleCount: number;
+    };
+
+    const [agg] = await this.telemetry
+      .aggregate<HourAgg>([
+        { $match: { serialNumber, timestamp: { $gte: hourStart, $lt: hourEnd } } },
+        { $sort: { timestamp: 1 } },
+        {
+          $group: {
+            _id: null,
+            firstEnergy: { $first: "$energy" },
+            lastEnergy: { $last: "$energy" },
+            firstTimestamp: { $first: "$timestamp" },
+            lastTimestamp: { $last: "$timestamp" },
+            avgPower: { $avg: "$power" },
+            maxPower: { $max: "$power" },
+            avgVoltage: { $avg: "$voltage" },
+            minVoltage: { $min: "$voltage" },
+            maxVoltage: { $max: "$voltage" },
+            avgCurrent: { $avg: "$current" },
+            sampleCount: { $sum: 1 },
+          },
+        },
+      ])
+      .toArray();
+
+    if (!agg || agg.sampleCount === 0) {
+      return false;
+    }
+
+    const counterReset = agg.lastEnergy < agg.firstEnergy;
+    const energyKwh = counterReset ? undefined : Number((agg.lastEnergy - agg.firstEnergy).toFixed(3));
+    const now = new Date();
+
+    await this.telemetryHourly.updateOne(
+      { serialNumber, hourStart },
+      {
+        $set: {
+          deviceId,
+          firstEnergy: agg.firstEnergy,
+          lastEnergy: agg.lastEnergy,
+          energyKwh,
+          counterReset,
+          avgPower: Number(agg.avgPower.toFixed(2)),
+          maxPower: Number(agg.maxPower.toFixed(2)),
+          avgVoltage: Number(agg.avgVoltage.toFixed(2)),
+          minVoltage: Number(agg.minVoltage.toFixed(2)),
+          maxVoltage: Number(agg.maxVoltage.toFixed(2)),
+          avgCurrent: Number(agg.avgCurrent.toFixed(3)),
+          sampleCount: agg.sampleCount,
+          firstTimestamp: agg.firstTimestamp,
+          lastTimestamp: agg.lastTimestamp,
+          aggregatedAt: now,
+        },
+        $setOnInsert: {
+          serialNumber,
+          hourStart,
+        },
+      },
+      { upsert: true },
+    );
+
+    return true;
+  }
+
+  private async getHourlyBoundary(serialNumber: string, boundary: Date): Promise<BoundaryTelemetrySnapshot | null> {
+    const MAX_HOURLY_GAP_MS = 2 * 60 * 60 * 1000;
+
+    const before = await this.telemetryHourly.findOne(
+      { serialNumber, hourStart: { $lte: boundary }, counterReset: false },
+      { sort: { hourStart: -1 } },
+    );
+
+    if (before) {
+      const gapMs = boundary.getTime() - before.lastTimestamp.getTime();
+      if (gapMs >= 0 && gapMs <= MAX_HOURLY_GAP_MS) {
+        return {
+          timestamp: before.lastTimestamp,
+          energy: before.lastEnergy,
+          voltage: before.avgVoltage,
+          current: before.avgCurrent,
+          power: before.avgPower,
+        };
+      }
+    }
+
+    const after = await this.telemetryHourly.findOne(
+      { serialNumber, hourStart: { $gt: boundary }, counterReset: false },
+      { sort: { hourStart: 1 } },
+    );
+
+    if (after) {
+      const gapMs = after.firstTimestamp.getTime() - boundary.getTime();
+      if (gapMs >= 0 && gapMs <= MAX_HOURLY_GAP_MS) {
+        return {
+          timestamp: after.firstTimestamp,
+          energy: after.firstEnergy,
+          voltage: after.avgVoltage,
+          current: after.avgCurrent,
+          power: after.avgPower,
+        };
+      }
+    }
+
+    return null;
+  }
+
   private async ensureIndexes(): Promise<void> {
     await this.telemetry.createIndex({ deviceId: 1, timestamp: -1 });
     await this.telemetry.createIndex({ serialNumber: 1, timestamp: -1 });
@@ -2079,6 +2285,9 @@ export class MongoService {
     await this.firmwareReleases.createIndex({ isActive: 1, releasedAt: -1 });
     await this.botSessions.createIndex({ chatId: 1 }, { unique: true });
     await this.botSessions.createIndex({ updatedAt: -1 });
+    await this.telemetry.createIndex({ serialNumber: 1, timestamp: -1, voltage: 1 });
+    await this.telemetry.createIndex({ receivedAt: 1 }, { expireAfterSeconds: 95 * 24 * 3600 });
+    await this.telemetryHourly.createIndex({ serialNumber: 1, hourStart: 1 }, { unique: true });
   }
 }
 
