@@ -127,8 +127,12 @@ void loop()
 
     MeterReadings readings = meter.getReadings();
 
+    static unsigned long firstNanAt = 0;
+
     if (!isnan(readings.voltage))
     {
+        firstNanAt = 0;
+
         if (now - lastMeterLog > METER_LOG_INTERVAL)
         {
             Serial.printf("PZEM OK | V: %.1f V | I: %.3f A | P: %.1f W | E: %.3f kWh\n",
@@ -146,10 +150,23 @@ void loop()
             lastSendData = now;
         }
     }
-    else if (now - lastMeterLog > METER_LOG_INTERVAL)
+    else
     {
-        Serial.println("PZEM read failed: check module power, UART wiring, and GPIO16/GPIO17 RX/TX mapping.");
-        lastMeterLog = now;
+        if (firstNanAt == 0) firstNanAt = now;
+
+        // Restart nếu PZEM trả NaN liên tục quá 60 giây
+        if (now - firstNanAt > 60000)
+        {
+            Serial.println("PZEM unresponsive for 60s — restarting.");
+            delay(500);
+            ESP.restart();
+        }
+
+        if (now - lastMeterLog > METER_LOG_INTERVAL)
+        {
+            Serial.println("PZEM read failed: check module power, UART wiring, and GPIO16/GPIO17 RX/TX mapping.");
+            lastMeterLog = now;
+        }
     }
 
     wifiLedStatus.update();

@@ -1,0 +1,55 @@
+name: Firmware Release
+
+on:
+  push:
+    tags:
+      - "fw-v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#fw-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-
+
+      - name: Build firmware
+        env:
+          PLATFORMIO_BUILD_FLAGS: -DFIRMWARE_VERSION=\"${{ steps.version.outputs.VERSION }}\"
+        run: pio run -e esp32doit-devkit-v1
+
+      - name: Rename artifact
+        run: |
+          cp .pio/build/esp32doit-devkit-v1/firmware.bin \
+             firmware-${{ steps.version.outputs.VERSION }}.bin
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Firmware ${{ steps.version.outputs.VERSION }}"
+          body: |
+            ESP32 firmware build for tag `${{ github.ref_name }}`.
+
+            **Flash via OTA:** use the Telegram bot command
+            ```
+            /ota_update <serialNumber> ${{ steps.version.outputs.VERSION }}
+            ```
+          files: firmware-${{ steps.version.outputs.VERSION }}.bin
