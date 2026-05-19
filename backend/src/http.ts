@@ -427,7 +427,7 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
   });
 
   app.get("/dashboard/devices/:serialNumber/telemetry", authMiddleware, async (req, res) => {
-    const rows = await mongoService.getRecentTelemetry(req.params.serialNumber, 30);
+    const rows = await mongoService.getRecentTelemetry(String(req.params.serialNumber), 30);
     res.json(rows);
   });
 
@@ -461,12 +461,12 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
     if (displayName) patch.displayName = displayName;
     if (systemRole === "platform_admin" || systemRole === "user") patch.systemRole = systemRole;
     if (status === "active" || status === "suspended") patch.status = status;
-    await mongoService.updateWebUser(req.params.userId, patch as Parameters<typeof mongoService.updateWebUser>[1]);
+    await mongoService.updateWebUser(String(req.params.userId), patch as Parameters<typeof mongoService.updateWebUser>[1]);
     res.status(204).end();
   });
 
   app.delete("/dashboard/users/:userId", authMiddleware, requirePlatformAdmin, async (req, res) => {
-    await mongoService.deleteWebUser(req.params.userId);
+    await mongoService.deleteWebUser(String(req.params.userId));
     res.status(204).end();
   });
 
