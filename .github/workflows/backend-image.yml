@@ -14,7 +14,20 @@ permissions:
   packages: write
 
 jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+        working-directory: ./backend
+      - run: npm run typecheck
+        working-directory: ./backend
+
   publish:
+    needs: typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
