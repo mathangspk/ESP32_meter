@@ -2,7 +2,47 @@
 
 ## Current Goal
 
-System stable and fully deployed. Web dashboard operational.
+System stable and fully deployed. Codebase refactoring in progress for maintainability.
+
+## Session Delta (2026-05-19 — part 3)
+
+### What Changed
+
+1. **`http.ts` split into route modules** (completed)
+   - `backend/src/http.ts` (monolith) → thin orchestrator + 6 route files:
+     - `routes/auth.ts` — `/auth/login`, `/auth/me`
+     - `routes/dashboard.ts` — `/dashboard/*` (JWT-protected)
+     - `routes/devices.ts` — `/devices/*`
+     - `routes/ota.ts` — `/ota/jobs/*`
+     - `routes/admin.ts` — `/admin/*`
+     - `routes/internal.ts` — `/internal/*` (bot-to-backend)
+     - `routes/utils.ts` — shared `parseLimit()` helper
+   - Fixed `@types/express@5` multi-middleware typing: `String(req.params.xxx)` where needed
+
+2. **`mongodb.ts` split into domain repository classes** (completed, deployed)
+   - `backend/src/mongodb.ts` (2377 lines) → 10 files under `backend/src/db/`:
+     - `db/types.ts` — all exported record types
+     - `db/analytics.ts` — pure timezone/energy math (no DB access)
+     - `db/device.repo.ts` — `DeviceRepo`: device CRUD, claim/unclaim, commands
+     - `db/telemetry.repo.ts` — `TelemetryRepo`: ingest, device-state, rollup, offline tracking
+     - `db/ota.repo.ts` — `OtaRepo`: OTA jobs, firmware releases, policy evaluation
+     - `db/user.repo.ts` — `UserRepo`: web users, Telegram identity, memberships
+     - `db/tenant.repo.ts` — `TenantRepo`: tenants, sites
+     - `db/alert.repo.ts` — `AlertRepo`: alert events, notification queue
+     - `db/bot.repo.ts` — `BotRepo`: bot sessions
+     - `db/analytics.repo.ts` — `AnalyticsRepo`: daily summary, energy analytics
+   - `mongodb.ts` is now a thin orchestrator (~170 lines of one-liner delegates)
+   - All existing imports (`from "./mongodb"`, `from "../mongodb"`) unchanged via re-exports
+   - TypeScript typecheck: 0 errors
+   - Deployed to VPS: CI built new image, pulled and restarted — confirmed healthy
+
+### Confirmed Working After Deploy
+
+- All 5 containers Up (no restarts)
+- Healthz: `{"status":"ok","mqttConnected":true,"mongodbConnected":true}`
+- Backend uptime resumed cleanly after container recreation
+
+---
 
 ## Session Delta (2026-05-19 — part 2)
 
@@ -138,11 +178,12 @@ Stable operation. All planned optimizations deployed.
 
 ## Next Recommended Steps
 
-1. **Telegram role scoping**: Restrict OTA/admin commands by `systemRole`; scope device commands by tenant membership.
-2. **Self-service claim flow**: User enters serial number in Telegram → claims device to their account.
-3. **Optional**: `/peak_day` intent + backend endpoint for `"Ngày dùng nhiều điện nhất trong tuần"`.
-4. **Optional**: Hourly breakdown endpoint for `"bảng theo giờ"` questions.
-5. **Monitor**: Watch alert behavior on next device restart — confirm no spam with 2-min delay.
+1. **Codebase refactor — Domain 3**: `alerts.ts` is straightforward; next meaningful target is `assistant-bot/src/telegram.ts` (large NLU dispatch file) — split into intent handlers.
+2. **Telegram role scoping**: Restrict OTA/admin commands by `systemRole`; scope device commands by tenant membership.
+3. **Self-service claim flow**: User enters serial number in Telegram → claims device to their account.
+4. **Optional**: `/peak_day` intent + backend endpoint for `"Ngày dùng nhiều điện nhất trong tuần"`.
+5. **Optional**: Hourly breakdown endpoint for `"bảng theo giờ"` questions.
+6. **Monitor**: Watch alert behavior on next device restart — confirm no spam with 2-min delay.
 
 ## Known Constraints
 
@@ -184,8 +225,9 @@ ssh vps-prod "curl -sS http://127.0.0.1:3000/devices/7B34E3EC/firmware-policy"
 ## Last Verified Result (2026-05-19)
 
 - Backend healthz: `{"status":"ok","mqttConnected":true,"mongodbConnected":true}`
-- Backend logs: rollup scheduled (2am UTC), catchup complete (1 device), admin bootstrapped
-- All 5 containers Up (added frontend), 0 restarts
+- Backend image: `sha256:8e330eca` (mongodb domain split, CI commit `46cbcc2`)
+- All 5 containers Up (mosquitto, mongodb, backend, assistant-bot, frontend), 0 restarts
 - Dashboard login verified: `admin` → JWT `systemRole: platform_admin`
 - Frontend HTTP 200 at port 8080
 - GHCR pull working from VPS with PAT auth
+- TypeScript typecheck: 0 errors on full backend codebase
