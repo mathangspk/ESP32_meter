@@ -1,7 +1,7 @@
 import express from "express";
 import { ObjectId } from "mongodb";
 import { ZodError } from "zod";
-import { authMiddleware, generateToken, requirePlatformAdmin, verifyPassword, type JwtPayload } from "./auth";
+import { authMiddleware, generateToken, hashPassword, requirePlatformAdmin, verifyPassword, type JwtPayload } from "./auth";
 import { logger } from "./logger";
 import { mongoService } from "./mongodb";
 import { performDeviceAction } from "./device-actions";
@@ -446,7 +446,6 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
       return;
     }
     const role = systemRole === "platform_admin" ? "platform_admin" : "user";
-    const { hashPassword } = await import("./auth");
     const passwordHash = await hashPassword(password);
     const userId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const user = await mongoService.createWebUser({ userId, username, passwordHash, displayName, systemRole: role });
