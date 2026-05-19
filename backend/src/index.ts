@@ -114,14 +114,12 @@ async function shutdown(signal: string): Promise<void> {
 async function bootstrapAdminUser(): Promise<void> {
   if (await mongoService.hasPlatformAdmin()) return;
   const passwordHash = await hashPassword(config.DASHBOARD_ADMIN_PASSWORD);
-  await mongoService.createWebUser({
-    userId: config.PLATFORM_ADMIN_USER_ID,
-    username: config.DASHBOARD_ADMIN_USERNAME,
+  await mongoService.setAdminCredentials(
+    config.PLATFORM_ADMIN_USER_ID,
+    config.DASHBOARD_ADMIN_USERNAME,
     passwordHash,
-    displayName: config.PLATFORM_ADMIN_DISPLAY_NAME,
-    systemRole: "platform_admin",
-  });
-  logger.info({ username: config.DASHBOARD_ADMIN_USERNAME }, "Bootstrapped platform admin user");
+  );
+  logger.info({ username: config.DASHBOARD_ADMIN_USERNAME }, "Bootstrapped platform admin credentials");
 }
 
 async function main(): Promise<void> {

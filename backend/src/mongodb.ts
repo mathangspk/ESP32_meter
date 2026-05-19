@@ -2344,6 +2344,13 @@ export class MongoService {
     return count > 0;
   }
 
+  async setAdminCredentials(userId: string, username: string, passwordHash: string): Promise<void> {
+    await this.users.updateOne(
+      { userId },
+      { $set: { username, passwordHash, systemRole: "platform_admin" as const, updatedAt: new Date() } },
+    );
+  }
+
   async getDashboardStats(): Promise<{
     totalDevices: number;
     onlineDevices: number;
