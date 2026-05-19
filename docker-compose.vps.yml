@@ -41,6 +41,14 @@ services:
     depends_on:
       - backend
 
+  frontend:
+    image: ghcr.io/mathangspk/esp32-loss-power-frontend:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
 volumes:
   mosquitto_prod_data:
   mongodb_prod_data:

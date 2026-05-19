@@ -1,6 +1,7 @@
 import express from "express";
 import { ObjectId } from "mongodb";
 import { ZodError } from "zod";
+import { authMiddleware, generateToken, requirePlatformAdmin, verifyPassword, type JwtPayload } from "./auth";
 import { logger } from "./logger";
 import { mongoService } from "./mongodb";
 import { performDeviceAction } from "./device-actions";
@@ -385,6 +386,94 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
     const body = req.body as { error?: string };
     await mongoService.markNotificationFailed(new ObjectId(req.params.notificationId), body.error ?? "Unknown notification error");
     res.status(204).end();
+  });
+
+  // ── Auth ────────────────────────────────────────────────────────────────────
+
+  app.post("/auth/login", async (req, res) => {
+    const { username, password } = req.body as { username?: string; password?: string };
+    if (!username || !password) {
+      res.status(400).json({ error: "username and password are required" });
+      return;
+    }
+    const user = await mongoService.getUserByUsername(username);
+    if (!user?.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+    const token = generateToken({ userId: user.userId, systemRole: user.systemRole ?? "user" });
+    const { passwordHash: _ph, ...safeUser } = user;
+    res.json({ token, user: safeUser });
+  });
+
+  app.get("/auth/me", authMiddleware, async (req, res) => {
+    const { userId } = (req as typeof req & { user: JwtPayload }).user;
+    const user = await mongoService.getUserById(userId);
+    if (!user) { res.status(404).json({ error: "User not found" }); return; }
+    const { passwordHash: _ph, ...safeUser } = user;
+    res.json(safeUser);
+  });
+
+  // ── Dashboard ────────────────────────────────────────────────────────────────
+
+  app.get("/dashboard/stats", authMiddleware, async (_req, res) => {
+    const stats = await mongoService.getDashboardStats();
+    res.json(stats);
+  });
+
+  app.get("/dashboard/devices", authMiddleware, async (_req, res) => {
+    const devices = await mongoService.getDevices(200);
+    res.json(devices);
+  });
+
+  app.get("/dashboard/devices/:serialNumber/telemetry", authMiddleware, async (req, res) => {
+    const rows = await mongoService.getRecentTelemetry(req.params.serialNumber, 30);
+    res.json(rows);
+  });
+
+  app.get("/dashboard/users", authMiddleware, requirePlatformAdmin, async (_req, res) => {
+    const users = await mongoService.listWebUsers(200);
+    const safe = users.map(({ passwordHash: _ph, ...u }) => u);
+    res.json(safe);
+  });
+
+  app.post("/dashboard/users", authMiddleware, requirePlatformAdmin, async (req, res) => {
+    const { username, password, displayName, systemRole } = req.body as {
+      username?: string; password?: string; displayName?: string; systemRole?: string;
+    };
+    if (!username || !password || !displayName) {
+      res.status(400).json({ error: "username, password, displayName are required" });
+      return;
+    }
+    const role = systemRole === "platform_admin" ? "platform_admin" : "user";
+    const { hashPassword } = await import("./auth");
+    const passwordHash = await hashPassword(password);
+    const userId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const user = await mongoService.createWebUser({ userId, username, passwordHash, displayName, systemRole: role });
+    const { passwordHash: _ph, ...safe } = user;
+    res.status(201).json(safe);
+  });
+
+  app.put("/dashboard/users/:userId", authMiddleware, requirePlatformAdmin, async (req, res) => {
+    const { displayName, systemRole, status } = req.body as {
+      displayName?: string; systemRole?: string; status?: string;
+    };
+    const patch: Record<string, unknown> = {};
+    if (displayName) patch.displayName = displayName;
+    if (systemRole === "platform_admin" || systemRole === "user") patch.systemRole = systemRole;
+    if (status === "active" || status === "suspended") patch.status = status;
+    await mongoService.updateWebUser(req.params.userId, patch as Parameters<typeof mongoService.updateWebUser>[1]);
+    res.status(204).end();
+  });
+
+  app.delete("/dashboard/users/:userId", authMiddleware, requirePlatformAdmin, async (req, res) => {
+    await mongoService.deleteWebUser(req.params.userId);
+    res.status(204).end();
+  });
+
+  app.get("/dashboard/tenants", authMiddleware, requirePlatformAdmin, async (_req, res) => {
+    const tenants = await mongoService.getTenants(200);
+    res.json(tenants);
   });
 
   return app;

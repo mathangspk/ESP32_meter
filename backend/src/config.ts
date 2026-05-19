@@ -23,6 +23,9 @@ const envSchema = z.object({
   BOOTSTRAP_SITE_NAME: z.string().default("Default Site"),
   BOOTSTRAP_FIRMWARE_VERSION: z.string().default("1.0.0"),
   BOOTSTRAP_FIRMWARE_BOARD_TYPE: z.string().default(""),
+  JWT_SECRET: z.string().min(16).default("change-me-in-production-min-16-chars"),
+  DASHBOARD_ADMIN_USERNAME: z.string().default("admin"),
+  DASHBOARD_ADMIN_PASSWORD: z.string().min(8).default("changeme1"),
 });
 
 export const config = envSchema.parse(process.env);

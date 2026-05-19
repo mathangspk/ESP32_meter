@@ -68,6 +68,9 @@ export type SiteRecord = {
 
 export type UserRecord = {
   userId: string;
+  username?: string;
+  passwordHash?: string;
+  systemRole?: "platform_admin" | "user";
   displayName?: string;
   status: UserStatus;
   defaultTenantId?: string;
@@ -2288,6 +2291,79 @@ export class MongoService {
     await this.telemetry.createIndex({ serialNumber: 1, timestamp: -1, voltage: 1 });
     await this.telemetry.createIndex({ receivedAt: 1 }, { expireAfterSeconds: 95 * 24 * 3600 });
     await this.telemetryHourly.createIndex({ serialNumber: 1, hourStart: 1 }, { unique: true });
+    await this.users.createIndex({ username: 1 }, { unique: true, sparse: true });
+  }
+
+  // --- Dashboard / Auth ---
+
+  async getUserByUsername(username: string): Promise<UserRecord | null> {
+    return this.users.findOne({ username });
+  }
+
+  async createWebUser(input: {
+    userId: string;
+    username: string;
+    passwordHash: string;
+    displayName: string;
+    systemRole: "platform_admin" | "user";
+  }): Promise<UserRecord> {
+    const now = new Date();
+    const record: UserRecord = {
+      userId: input.userId,
+      username: input.username,
+      passwordHash: input.passwordHash,
+      systemRole: input.systemRole,
+      displayName: input.displayName,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.users.insertOne(record);
+    return record;
+  }
+
+  async updateWebUser(
+    userId: string,
+    patch: Partial<Pick<UserRecord, "displayName" | "systemRole" | "passwordHash" | "status">>,
+  ): Promise<void> {
+    await this.users.updateOne({ userId }, { $set: { ...patch, updatedAt: new Date() } });
+  }
+
+  async listWebUsers(limit = 100): Promise<UserRecord[]> {
+    return this.users
+      .find({ username: { $exists: true } }, { sort: { createdAt: -1 }, limit })
+      .toArray();
+  }
+
+  async deleteWebUser(userId: string): Promise<void> {
+    await this.users.deleteOne({ userId });
+  }
+
+  async hasPlatformAdmin(): Promise<boolean> {
+    const count = await this.users.countDocuments({ systemRole: "platform_admin" });
+    return count > 0;
+  }
+
+  async getDashboardStats(): Promise<{
+    totalDevices: number;
+    onlineDevices: number;
+    totalUsers: number;
+    totalTenants: number;
+  }> {
+    const onlineCutoff = new Date(Date.now() - 60 * 1000);
+    const [totalDevices, onlineDevices, totalUsers, totalTenants] = await Promise.all([
+      this.devices.countDocuments({}),
+      this.deviceStates.countDocuments({ isOffline: false, lastSeenAt: { $gte: onlineCutoff } }),
+      this.users.countDocuments({ username: { $exists: true } }),
+      this.tenants.countDocuments({}),
+    ]);
+    return { totalDevices, onlineDevices, totalUsers, totalTenants };
+  }
+
+  async getRecentTelemetry(serialNumber: string, limit = 20): Promise<TelemetryRecord[]> {
+    return this.telemetry
+      .find({ serialNumber }, { sort: { timestamp: -1 }, limit })
+      .toArray();
   }
 }
 

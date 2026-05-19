@@ -1,5 +1,6 @@
 import { Server } from "node:http";
 import { checkOfflineDevices } from "./alerts";
+import { hashPassword } from "./auth";
 import { config } from "./config";
 import { createHttpApp } from "./http";
 import { logger } from "./logger";
@@ -110,6 +111,19 @@ async function shutdown(signal: string): Promise<void> {
   process.exit(0);
 }
 
+async function bootstrapAdminUser(): Promise<void> {
+  if (await mongoService.hasPlatformAdmin()) return;
+  const passwordHash = await hashPassword(config.DASHBOARD_ADMIN_PASSWORD);
+  await mongoService.createWebUser({
+    userId: config.PLATFORM_ADMIN_USER_ID,
+    username: config.DASHBOARD_ADMIN_USERNAME,
+    passwordHash,
+    displayName: config.PLATFORM_ADMIN_DISPLAY_NAME,
+    systemRole: "platform_admin",
+  });
+  logger.info({ username: config.DASHBOARD_ADMIN_USERNAME }, "Bootstrapped platform admin user");
+}
+
 async function main(): Promise<void> {
   await mongoService.connect();
   await mqttService.connect();
@@ -127,6 +141,7 @@ async function main(): Promise<void> {
     });
   }, config.CHECK_INTERVAL_SECONDS * 1000);
 
+  void bootstrapAdminUser();
   scheduleRollupJob();
   void runRollupCatchup();
 }
