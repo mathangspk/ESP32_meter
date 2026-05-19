@@ -1,4 +1,6 @@
 import { config } from "./config";
+import { logger } from "./logger";
+import { previewText } from "./formatters";
 
 export type TelegramUpdate = {
   update_id: number;
@@ -42,7 +44,7 @@ export async function getUpdates(offset?: number): Promise<TelegramUpdate[]> {
   return json.result;
 }
 
-export async function sendMessage(chatId: string | number, text: string): Promise<void> {
+async function rawSendMessage(chatId: string | number, text: string): Promise<void> {
   const response = await fetch(`${baseUrl}/sendMessage`, {
     method: "POST",
     headers: {
@@ -57,4 +59,17 @@ export async function sendMessage(chatId: string | number, text: string): Promis
   if (!response.ok) {
     throw new Error(`Telegram sendMessage failed: ${response.status} ${await response.text()}`);
   }
+}
+
+export async function sendMessage(chatId: string | number, text: string): Promise<void> {
+  logger.info(
+    {
+      event: "telegram.outbound",
+      chatId: String(chatId),
+      textPreview: previewText(text),
+      textLength: text.length,
+    },
+    "Sending Telegram message",
+  );
+  await rawSendMessage(chatId, text);
 }
