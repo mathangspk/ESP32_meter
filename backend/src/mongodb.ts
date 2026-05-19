@@ -1,614 +1,80 @@
-import { Collection, Db, Document, MongoClient, ObjectId } from "mongodb";
+import { Db, MongoClient, ObjectId } from "mongodb";
 import { config } from "./config";
 import { serviceState } from "./service-state";
-import {
-  FirmwareReleaseRequest,
-  FirmwareReleaseSeverity,
-  FirmwareSupportStatus,
-  DeviceAction,
-  OtaStatus,
-  OtaStatusPayload,
-  TelemetryPayload,
-} from "./types";
+import { FirmwareReleaseRequest, OtaStatusPayload, TelemetryPayload } from "./types";
+import { DEFAULT_SITE_TIMEZONE } from "./db/analytics";
+import { AnalyticsRepo } from "./db/analytics.repo";
+import { AlertRepo } from "./db/alert.repo";
+import { BotRepo } from "./db/bot.repo";
+import { DeviceRepo } from "./db/device.repo";
+import { OtaRepo } from "./db/ota.repo";
+import { TelemetryRepo } from "./db/telemetry.repo";
+import { TenantRepo } from "./db/tenant.repo";
+import { UserRepo } from "./db/user.repo";
 
-export type DeviceLifecycleStatus =
-  | "factory_new"
-  | "networked_unclaimed"
-  | "claimed_unconfigured"
-  | "active"
-  | "unclaimed"
-  | "retired";
+export type {
+  DeviceLifecycleStatus,
+  DeviceClaimStatus,
+  UserStatus,
+  MembershipRole,
+  NotificationChannel,
+  NotificationQueueStatus,
+  NotificationType,
+  FirmwareReleaseRecord,
+  TenantRecord,
+  SiteRecord,
+  UserRecord,
+  TenantMembershipRecord,
+  ChannelIdentityRecord,
+  DeviceRecord,
+  DeviceAssignmentRecord,
+  AuditEventRecord,
+  DeviceCommandStatus,
+  DeviceCommandRecord,
+  DeviceStateRecord,
+  AlertEventRecord,
+  TelemetryRecord,
+  OtaJobStatus,
+  OtaJobRecord,
+  OtaStatusEventRecord,
+  TelemetryHourlyRecord,
+  NotificationQueueRecord,
+  BotSessionRecord,
+  DeviceListRecord,
+  FirmwarePolicyEvaluation,
+  DeviceAnalyticsSummary,
+  EnergyAnalyticsPreset,
+  DeviceEnergyAnalyticsSummary,
+  FleetSummary,
+  UserSummary,
+} from "./db/types";
 
-export type DeviceClaimStatus = "unclaimed" | "claimed";
-export type UserStatus = "invited" | "registered" | "active" | "inactive" | "suspended";
-export type MembershipRole = "platform_admin" | "tenant_admin" | "site_operator" | "viewer";
-export type NotificationChannel = "telegram";
-export type NotificationQueueStatus = "pending" | "processing" | "sent" | "failed";
-export type NotificationType =
-  | "device.offline"
-  | "device.recovered"
-  | "device.unsupported"
-  | "ota.status"
-  | "system.notice";
-
-export type FirmwareReleaseRecord = {
-  releaseId: string;
-  version: string;
-  severity: FirmwareReleaseSeverity;
-  supportStatus: FirmwareSupportStatus;
-  url?: string;
-  sha256?: string;
-  notes?: string;
-  chipFamily?: string;
-  chipModel?: string;
-  boardType?: string;
-  isActive: boolean;
-  releasedAt: Date;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type TenantRecord = {
-  tenantId: string;
-  name: string;
-  status: "active" | "inactive";
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type SiteRecord = {
-  siteId: string;
-  tenantId: string;
-  name: string;
-  timezone?: string;
-  status: "active" | "inactive";
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type UserRecord = {
-  userId: string;
-  username?: string;
-  passwordHash?: string;
-  systemRole?: "platform_admin" | "user";
-  displayName?: string;
-  status: UserStatus;
-  defaultTenantId?: string;
-  activatedAt?: Date;
-  lastActiveAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type TenantMembershipRecord = {
-  userId: string;
-  tenantId: string;
-  role: MembershipRole;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type ChannelIdentityRecord = {
-  provider: NotificationChannel;
-  externalId: string;
-  userId: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type DeviceRecord = {
-  serialNumber: string;
-  deviceId: string;
-  tenantId?: string;
-  siteId?: string;
-  ownerUserId?: string;
-  displayName?: string;
-  claimStatus: DeviceClaimStatus;
-  lifecycleStatus: DeviceLifecycleStatus;
-  lastFirmwareVersion?: string;
-  macAddress?: string;
-  chipFamily?: string;
-  chipModel?: string;
-  boardType?: string;
-  firstSeenAt: Date;
-  lastSeenAt: Date;
-  commissionedAt?: Date;
-  claimedAt?: Date;
-  unclaimedAt?: Date;
-  retiredAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type DeviceAssignmentRecord = {
-  serialNumber: string;
-  tenantId: string;
-  siteId?: string;
-  ownerUserId?: string;
-  assignedAt: Date;
-  unassignedAt?: Date;
-};
-
-export type AuditEventRecord = {
-  eventType: string;
-  actorUserId?: string;
-  tenantId?: string;
-  deviceSerialNumber?: string;
-  deviceId?: string;
-  payload?: Document;
-  createdAt: Date;
-};
-
-export type DeviceCommandStatus = "queued" | "published" | "failed";
-
-export type DeviceCommandRecord = {
-  commandId: string;
-  action: DeviceAction;
-  deviceId: string;
-  serialNumber: string;
-  commandTopic: string;
-  status: DeviceCommandStatus;
-  actorUserId: string;
-  reason?: string;
-  errorMessage?: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type DeviceStateRecord = {
-  deviceId: string;
-  serialNumber: string;
-  lastSeenAt: Date;
-  lastTelemetryAt: Date;
-  isOffline: boolean;
-  offlineSince?: Date;
-  lastOfflineAlertAt?: Date;
-  lastRecoveredAlertAt?: Date;
-  lastVoltage: number;
-  lastCurrent: number;
-  lastPower: number;
-  lastFirmwareVersion?: string;
-  lastOtaJobId?: string;
-  lastOtaStatus?: OtaStatus;
-  lastOtaTargetVersion?: string;
-  lastOtaMessage?: string;
-  lastOtaUpdatedAt?: Date;
-  updatedAt: Date;
-};
-
-export type AlertEventRecord = {
-  deviceId: string;
-  serialNumber: string;
-  type: "offline" | "recovered";
-  message: string;
-  sentAt: Date;
-  status: "queued" | "sent" | "failed";
-};
-
-type TelemetryRecord = {
-  deviceId: string;
-  serialNumber: string;
-  timestamp: Date;
-  voltage: number;
-  current: number;
-  power: number;
-  energy: number;
-  ipAddress: string;
-  firmwareVersion: string;
-  macAddress?: string;
-  chipFamily?: string;
-  chipModel?: string;
-  boardType?: string;
-  receivedAt: Date;
-};
-
-export type OtaJobStatus = "queued" | "published" | OtaStatus;
-
-export type OtaJobRecord = {
-  jobId: string;
-  deviceId: string;
-  serialNumber: string;
-  commandTopic: string;
-  targetVersion: string;
-  url: string;
-  sha256?: string;
-  status: OtaJobStatus;
-  createdAt: Date;
-  updatedAt: Date;
-  lastStatusMessage?: string;
-  currentVersion?: string;
-  completedAt?: Date;
-};
-
-export type OtaStatusEventRecord = {
-  jobId: string;
-  deviceId: string;
-  serialNumber: string;
-  status: OtaStatus;
-  message: string;
-  currentVersion: string;
-  targetVersion: string;
-  timestamp: Date;
-  receivedAt: Date;
-};
-
-export type TelemetryHourlyRecord = {
-  serialNumber: string;
-  deviceId: string;
-  hourStart: Date;
-  firstEnergy: number;
-  lastEnergy: number;
-  energyKwh?: number;
-  counterReset: boolean;
-  avgPower: number;
-  maxPower: number;
-  avgVoltage: number;
-  minVoltage: number;
-  maxVoltage: number;
-  avgCurrent: number;
-  sampleCount: number;
-  firstTimestamp: Date;
-  lastTimestamp: Date;
-  aggregatedAt: Date;
-};
-
-export type NotificationQueueRecord = {
-  _id?: ObjectId;
-  type: NotificationType;
-  channel: NotificationChannel;
-  targetExternalId: string;
-  tenantId?: string;
-  userId?: string;
-  title?: string;
-  text: string;
-  payload?: Document;
-  status: NotificationQueueStatus;
-  attemptCount: number;
-  lastError?: string;
-  createdAt: Date;
-  processingAt?: Date;
-  sentAt?: Date;
-  updatedAt: Date;
-};
-
-export type BotSessionRecord = {
-  chatId: string;
-  state: Document;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-type DeviceListRecord = DeviceRecord & {
-  state?: DeviceStateRecord | null;
-};
-
-export type FirmwarePolicyEvaluation = {
-  serialNumber: string;
-  deviceId: string;
-  currentVersion?: string;
-  supportStatus: FirmwareSupportStatus;
-  severity: FirmwareReleaseSeverity;
-  updateAvailable: boolean;
-  latestVersion?: string;
-  release?: FirmwareReleaseRecord;
-  recommendedRelease?: FirmwareReleaseRecord;
-  message: string;
-};
-
-export type DeviceAnalyticsSummary = {
-  serialNumber: string;
-  deviceId: string;
-  displayName?: string;
-  tenantId?: string;
-  siteId?: string;
-  siteTimezone: string;
-  dayStart: Date;
-  dayEnd: Date;
-  currentVoltage?: number;
-  currentCurrent?: number;
-  currentPower?: number;
-  currentSeenAt?: Date;
-  todayEnergyKwh?: number;
-  peakHourStart?: Date;
-  peakHourEnd?: Date;
-  peakHourAveragePower?: number;
-  sampleCount: number;
-  dataStatus: "ok" | "insufficient_data" | "counter_reset_detected";
-  messages: string[];
-};
-
-export type EnergyAnalyticsPreset =
-  | "today"
-  | "yesterday"
-  | "last_7_days"
-  | "this_week"
-  | "last_week"
-  | "this_month"
-  | "last_month";
-
-export type DeviceEnergyAnalyticsSummary = {
-  serialNumber: string;
-  deviceId: string;
-  displayName?: string;
-  tenantId?: string;
-  siteId?: string;
-  siteTimezone: string;
-  rangeStart: Date;
-  rangeEnd: Date;
-  preset?: EnergyAnalyticsPreset;
-  requestedStartDate?: string;
-  requestedEndDate?: string;
-  dayCount: number;
-  energyKwh?: number;
-  averageDailyKwh?: number;
-  sampleCount: number;
-  dataStatus: "ok" | "insufficient_data" | "counter_reset_detected";
-  messages: string[];
-};
-
-type TimeRange = {
-  rangeStart: Date;
-  rangeEnd: Date;
-  dayCount: number;
-};
-
-type EnergyRangeOptions = { preset: EnergyAnalyticsPreset } | { startDate: string; endDate: string };
-
-type BoundaryTelemetrySnapshot = Pick<TelemetryRecord, "timestamp" | "energy" | "voltage" | "current" | "power">;
-
-type BoundaryResolution =
-  | { status: "ok"; sample: BoundaryTelemetrySnapshot; mode: "at_or_before" | "after_fallback" | "hourly_fallback" }
-  | { status: "missing"; reason: string };
-
-const DEFAULT_SITE_TIMEZONE = "Asia/Ho_Chi_Minh";
-const BOUNDARY_MAX_GAP_MS = 5 * 60 * 1000;
-const MIN_VALID_VOLTAGE = 50;
-
-function getTimeZoneParts(date: Date, timeZone: string) {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-
-  const parts = formatter.formatToParts(date);
-  const getValue = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value ?? "0");
-  return {
-    year: getValue("year"),
-    month: getValue("month"),
-    day: getValue("day"),
-    hour: getValue("hour"),
-    minute: getValue("minute"),
-    second: getValue("second"),
-  };
-}
-
-function zonedDateTimeToUtc(parts: { year: number; month: number; day: number; hour?: number; minute?: number; second?: number }, timeZone: string) {
-  const utcGuess = new Date(
-    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour ?? 0, parts.minute ?? 0, parts.second ?? 0, 0),
-  );
-  const zonedGuess = getTimeZoneParts(utcGuess, timeZone);
-  const zonedGuessUtc = Date.UTC(
-    zonedGuess.year,
-    zonedGuess.month - 1,
-    zonedGuess.day,
-    zonedGuess.hour,
-    zonedGuess.minute,
-    zonedGuess.second,
-    0,
-  );
-
-  return new Date(utcGuess.getTime() - (zonedGuessUtc - utcGuess.getTime()));
-}
-
-function getLocalDayBounds(now: Date, timeZone: string) {
-  const localNow = getTimeZoneParts(now, timeZone);
-  const dayStart = zonedDateTimeToUtc({ year: localNow.year, month: localNow.month, day: localNow.day }, timeZone);
-  const nextDaySeed = new Date(Date.UTC(localNow.year, localNow.month - 1, localNow.day + 1, 0, 0, 0, 0));
-  const nextDayParts = {
-    year: nextDaySeed.getUTCFullYear(),
-    month: nextDaySeed.getUTCMonth() + 1,
-    day: nextDaySeed.getUTCDate(),
-  };
-  const dayEnd = zonedDateTimeToUtc(nextDayParts, timeZone);
-  return { dayStart, dayEnd };
-}
-
-function addLocalDays(date: Date, timeZone: string, amount: number) {
-  const parts = getTimeZoneParts(date, timeZone);
-  const seed = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + amount, 0, 0, 0, 0));
-  return zonedDateTimeToUtc(
-    {
-      year: seed.getUTCFullYear(),
-      month: seed.getUTCMonth() + 1,
-      day: seed.getUTCDate(),
-    },
-    timeZone,
-  );
-}
-
-function getLocalWeekStart(now: Date, timeZone: string) {
-  const localNow = getTimeZoneParts(now, timeZone);
-  const jsDay = new Date(Date.UTC(localNow.year, localNow.month - 1, localNow.day)).getUTCDay();
-  const daysSinceMonday = (jsDay + 6) % 7;
-  return addLocalDays(zonedDateTimeToUtc({ year: localNow.year, month: localNow.month, day: localNow.day }, timeZone), timeZone, -daysSinceMonday);
-}
-
-function getLocalMonthStart(now: Date, timeZone: string) {
-  const localNow = getTimeZoneParts(now, timeZone);
-  return zonedDateTimeToUtc({ year: localNow.year, month: localNow.month, day: 1 }, timeZone);
-}
-
-function getInclusiveLocalDayCount(rangeStart: Date, rangeEndExclusive: Date, timeZone: string) {
-  const start = getTimeZoneParts(rangeStart, timeZone);
-  const endSeed = new Date(rangeEndExclusive.getTime() - 1);
-  const end = getTimeZoneParts(endSeed, timeZone);
-  const startUtc = Date.UTC(start.year, start.month - 1, start.day, 0, 0, 0, 0);
-  const endUtc = Date.UTC(end.year, end.month - 1, end.day, 0, 0, 0, 0);
-  return Math.floor((endUtc - startUtc) / (24 * 60 * 60 * 1000)) + 1;
-}
-
-function resolveEnergyPresetRange(preset: EnergyAnalyticsPreset, now: Date, timeZone: string) {
-  const { dayStart: todayStart } = getLocalDayBounds(now, timeZone);
-  switch (preset) {
-    case "today":
-      return { rangeStart: todayStart, rangeEnd: now, dayCount: 1 };
-    case "yesterday": {
-      const yesterdayStart = addLocalDays(todayStart, timeZone, -1);
-      return { rangeStart: yesterdayStart, rangeEnd: todayStart, dayCount: 1 };
-    }
-    case "last_7_days":
-      return { rangeStart: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), rangeEnd: now, dayCount: 7 };
-    case "this_week": {
-      const weekStart = getLocalWeekStart(now, timeZone);
-      return { rangeStart: weekStart, rangeEnd: now, dayCount: getInclusiveLocalDayCount(weekStart, now, timeZone) };
-    }
-    case "last_week": {
-      const thisWeekStart = getLocalWeekStart(now, timeZone);
-      const lastWeekStart = addLocalDays(thisWeekStart, timeZone, -7);
-      return { rangeStart: lastWeekStart, rangeEnd: thisWeekStart, dayCount: 7 };
-    }
-    case "this_month": {
-      const monthStart = getLocalMonthStart(now, timeZone);
-      return { rangeStart: monthStart, rangeEnd: now, dayCount: getInclusiveLocalDayCount(monthStart, now, timeZone) };
-    }
-    case "last_month": {
-      const thisMonthStart = getLocalMonthStart(now, timeZone);
-      const lastMonthSeed = new Date(thisMonthStart.getTime() - 1);
-      const lastMonthStart = getLocalMonthStart(lastMonthSeed, timeZone);
-      return {
-        rangeStart: lastMonthStart,
-        rangeEnd: thisMonthStart,
-        dayCount: getInclusiveLocalDayCount(lastMonthStart, thisMonthStart, timeZone),
-      };
-    }
-  }
-}
-
-function resolveCustomDateRange(startDate: string, endDate: string, timeZone: string) {
-  const parseDate = (value: string) => {
-    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) {
-      throw new Error("Dates must use YYYY-MM-DD format");
-    }
-
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const day = Number(match[3]);
-    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-      throw new Error("Invalid date value");
-    }
-
-    return { year, month, day };
-  };
-
-  const start = parseDate(startDate);
-  const end = parseDate(endDate);
-  const rangeStart = zonedDateTimeToUtc(start, timeZone);
-  const endStart = zonedDateTimeToUtc(end, timeZone);
-  const rangeEnd = addLocalDays(endStart, timeZone, 1);
-  if (rangeEnd <= rangeStart) {
-    throw new Error("endDate must be on or after startDate");
-  }
-
-  return {
-    rangeStart,
-    rangeEnd,
-    dayCount: getInclusiveLocalDayCount(rangeStart, rangeEnd, timeZone),
-  };
-}
-
-function getSegmentEnd(cursor: Date, rangeEnd: Date, timeZone: string) {
-  const local = getTimeZoneParts(cursor, timeZone);
-  const dayStart = zonedDateTimeToUtc({ year: local.year, month: local.month, day: local.day }, timeZone);
-  const nextDayStart = addLocalDays(dayStart, timeZone, 1);
-  return nextDayStart < rangeEnd ? nextDayStart : rangeEnd;
-}
-
-function buildRangeSegments(rangeStart: Date, rangeEnd: Date, timeZone: string) {
-  const segments: Array<{ start: Date; end: Date }> = [];
-  let cursor = rangeStart;
-  while (cursor < rangeEnd) {
-    const end = getSegmentEnd(cursor, rangeEnd, timeZone);
-    segments.push({ start: cursor, end });
-    cursor = end;
-  }
-  return segments;
-}
-
-type FleetSummary = {
-  totals: {
-    devices: number;
-    claimedDevices: number;
-    unclaimedDevices: number;
-    activeDevices: number;
-    onlineDevices: number;
-    onlineUnclaimedDevices: number;
-    users: number;
-    activeUsers: number;
-    tenants: number;
-    sites: number;
-  };
-  lifecycleCounts: Array<{ lifecycleStatus: string; count: number }>;
-};
-
-type UserSummary = {
-  totals: {
-    users: number;
-    activeUsers: number;
-    invitedUsers: number;
-    suspendedUsers: number;
-  };
-};
+import { Document } from "mongodb";
+import { EnergyRangeOptions } from "./db/analytics";
 
 export class MongoService {
   private client = new MongoClient(config.MONGODB_URI);
   private db!: Db;
-  private telemetry!: Collection<TelemetryRecord>;
-  private deviceStates!: Collection<DeviceStateRecord>;
-  private devices!: Collection<DeviceRecord>;
-  private users!: Collection<UserRecord>;
-  private tenantMemberships!: Collection<TenantMembershipRecord>;
-  private channelIdentities!: Collection<ChannelIdentityRecord>;
-  private tenants!: Collection<TenantRecord>;
-  private sites!: Collection<SiteRecord>;
-  private deviceAssignments!: Collection<DeviceAssignmentRecord>;
-  private auditEvents!: Collection<AuditEventRecord>;
-  private deviceCommands!: Collection<DeviceCommandRecord>;
-  private alertEvents!: Collection<AlertEventRecord>;
-  private otaJobs!: Collection<OtaJobRecord>;
-  private otaStatusEvents!: Collection<OtaStatusEventRecord>;
-  private notificationQueue!: Collection<NotificationQueueRecord>;
-  private firmwareReleases!: Collection<FirmwareReleaseRecord>;
-  private botSessions!: Collection<BotSessionRecord>;
-  private telemetryHourly!: Collection<TelemetryHourlyRecord>;
+  private deviceRepo!: DeviceRepo;
+  private telemetryRepo!: TelemetryRepo;
+  private otaRepo!: OtaRepo;
+  private userRepo!: UserRepo;
+  private tenantRepo!: TenantRepo;
+  private alertRepo!: AlertRepo;
+  private botRepo!: BotRepo;
+  private analyticsRepo!: AnalyticsRepo;
 
   async connect(): Promise<void> {
     await this.client.connect();
     this.db = this.client.db(config.MONGODB_DB_NAME);
-    this.telemetry = this.db.collection<TelemetryRecord>("telemetry");
-    this.deviceStates = this.db.collection<DeviceStateRecord>("device_states");
-    this.devices = this.db.collection<DeviceRecord>("devices");
-    this.users = this.db.collection<UserRecord>("users");
-    this.tenantMemberships = this.db.collection<TenantMembershipRecord>("tenant_memberships");
-    this.channelIdentities = this.db.collection<ChannelIdentityRecord>("channel_identities");
-    this.tenants = this.db.collection<TenantRecord>("tenants");
-    this.sites = this.db.collection<SiteRecord>("sites");
-    this.deviceAssignments = this.db.collection<DeviceAssignmentRecord>("device_assignments");
-    this.auditEvents = this.db.collection<AuditEventRecord>("audit_events");
-    this.deviceCommands = this.db.collection<DeviceCommandRecord>("device_commands");
-    this.alertEvents = this.db.collection<AlertEventRecord>("alert_events");
-    this.otaJobs = this.db.collection<OtaJobRecord>("ota_jobs");
-    this.otaStatusEvents = this.db.collection<OtaStatusEventRecord>("ota_status_events");
-    this.notificationQueue = this.db.collection<NotificationQueueRecord>("notification_queue");
-    this.firmwareReleases = this.db.collection<FirmwareReleaseRecord>("firmware_releases");
-    this.botSessions = this.db.collection<BotSessionRecord>("bot_sessions");
-    this.telemetryHourly = this.db.collection<TelemetryHourlyRecord>("telemetry_hourly");
+    this.deviceRepo = new DeviceRepo(this.db);
+    this.telemetryRepo = new TelemetryRepo(this.db);
+    this.otaRepo = new OtaRepo(this.db);
+    this.userRepo = new UserRepo(this.db);
+    this.tenantRepo = new TenantRepo(this.db);
+    this.alertRepo = new AlertRepo(this.db);
+    this.botRepo = new BotRepo(this.db);
+    this.analyticsRepo = new AnalyticsRepo(this.db, this.deviceRepo);
     await this.ensureIndexes();
     await this.bootstrapPlatformAdmin();
     await this.bootstrapFirmwareRelease();
@@ -620,657 +86,135 @@ export class MongoService {
     await this.client.close();
   }
 
-  async insertTelemetry(payload: TelemetryPayload): Promise<void> {
-    await this.telemetry.insertOne({
-      deviceId: payload.device_id,
-      serialNumber: payload.serial_number,
-      timestamp: new Date(payload.timestamp),
-      voltage: payload.voltage,
-      current: payload.current,
-      power: payload.power,
-      energy: payload.energy,
-      ipAddress: payload.ip_address,
-      firmwareVersion: payload.firmware_version,
-      macAddress: payload.mac_address,
-      chipFamily: payload.chip_family,
-      chipModel: payload.chip_model,
-      boardType: payload.board_type,
-      receivedAt: new Date(),
-    });
+  // --- Telemetry ---
+  insertTelemetry(payload: TelemetryPayload) { return this.telemetryRepo.insertTelemetry(payload); }
+  upsertDeviceState(payload: TelemetryPayload) { return this.telemetryRepo.upsertDeviceState(payload); }
+  markRecovered(deviceId: string, sentAt: Date) { return this.telemetryRepo.markRecovered(deviceId, sentAt); }
+  clearOfflinePending(deviceId: string) { return this.telemetryRepo.clearOfflinePending(deviceId); }
+  markOfflinePending(detectionCutoff: Date) { return this.telemetryRepo.markOfflinePending(detectionCutoff); }
+  markOffline(deviceId: string, sentAt: Date) { return this.telemetryRepo.markOffline(deviceId, sentAt); }
+  getDevicesToAlert(alertCutoff: Date) { return this.telemetryRepo.getDevicesToAlert(alertCutoff); }
+  getRecentTelemetry(serialNumber: string, limit?: number) { return this.telemetryRepo.getRecentTelemetry(serialNumber, limit); }
+  rollupTelemetryForDevice(serialNumber: string, deviceId: string, startHour: Date, endHour: Date) {
+    return this.telemetryRepo.rollupTelemetryForDevice(serialNumber, deviceId, startHour, endHour);
   }
 
-  async upsertDeviceState(payload: TelemetryPayload): Promise<DeviceStateRecord | null> {
-    await this.upsertDeviceFromTelemetry(payload);
+  // --- Devices ---
+  getDevices(limit?: number) { return this.deviceRepo.getDevices(limit); }
+  getDeviceHealth(identifier: string) { return this.deviceRepo.getDeviceHealth(identifier); }
+  getDeviceSerialNumbers() { return this.deviceRepo.getDeviceSerialNumbers(); }
+  getDevicesForTenant(tenantId: string, limit?: number) { return this.deviceRepo.getDevicesForTenant(tenantId, limit); }
+  getUnclaimedDevices(options?: { onlineOnly?: boolean; limit?: number }) { return this.deviceRepo.getUnclaimedDevices(options); }
+  claimDevice(input: { serialNumber: string; tenantId: string; siteId: string; ownerUserId: string; displayName: string }) {
+    return this.deviceRepo.claimDevice(input);
+  }
+  unclaimDevice(input: { identifier: string; actorUserId: string; reason?: string }) {
+    return this.deviceRepo.unclaimDevice(input);
+  }
+  createDeviceCommand(input: { commandId: string; action: import("./types").DeviceAction; identifier: string; commandTopic: string; actorUserId: string; reason?: string }) {
+    return this.deviceRepo.createDeviceCommand(input);
+  }
+  markDeviceCommandPublished(commandId: string) { return this.deviceRepo.markDeviceCommandPublished(commandId); }
+  markDeviceCommandFailed(commandId: string, errorMessage: string) { return this.deviceRepo.markDeviceCommandFailed(commandId, errorMessage); }
+  getDeviceCommands(limit?: number) { return this.deviceRepo.getDeviceCommands(limit); }
 
-    const now = new Date();
-    const result = await this.deviceStates.findOneAndUpdate(
-      { deviceId: payload.device_id },
-      {
-        $set: {
-          serialNumber: payload.serial_number,
-          lastSeenAt: now,
-          lastTelemetryAt: new Date(payload.timestamp),
-          lastVoltage: payload.voltage,
-          lastCurrent: payload.current,
-          lastPower: payload.power,
-          lastFirmwareVersion: payload.firmware_version,
-          updatedAt: now,
-        },
-        $setOnInsert: {
-          deviceId: payload.device_id,
-          isOffline: false,
-        },
-      },
-      { upsert: true, returnDocument: "before" },
-    );
-    return result;
+  // --- OTA ---
+  createOtaJob(job: Parameters<OtaRepo["createOtaJob"]>[0]) { return this.otaRepo.createOtaJob(job); }
+  markOtaJobPublished(jobId: string) { return this.otaRepo.markOtaJobPublished(jobId); }
+  markOtaJobFailed(jobId: string, message: string) { return this.otaRepo.markOtaJobFailed(jobId, message); }
+  recordOtaStatus(payload: OtaStatusPayload) { return this.otaRepo.recordOtaStatus(payload); }
+  getOtaJob(jobId: string) { return this.otaRepo.getOtaJob(jobId); }
+  getOtaJobs(limit?: number) { return this.otaRepo.getOtaJobs(limit); }
+  createFirmwareRelease(input: FirmwareReleaseRequest) { return this.otaRepo.createFirmwareRelease(input); }
+  getFirmwareReleases(limit?: number) { return this.otaRepo.getFirmwareReleases(limit); }
+  evaluateFirmwarePolicyForDevice(identifier: string) { return this.otaRepo.evaluateFirmwarePolicyForDevice(identifier); }
+  getFirmwareReleaseForDevice(identifier: string, version: string) { return this.otaRepo.getFirmwareReleaseForDevice(identifier, version); }
+  evaluateFirmwarePolicyForFleet(limit?: number) { return this.otaRepo.evaluateFirmwarePolicyForFleet(limit); }
+
+  // --- Users ---
+  getUserById(userId: string) { return this.userRepo.getUserById(userId); }
+  getUserByUsername(username: string) { return this.userRepo.getUserByUsername(username); }
+  identifyTelegramUser(input: { externalId: string; displayName?: string; username?: string }) {
+    return this.userRepo.identifyTelegramUser(input);
+  }
+  getMembershipsForUser(userId: string) { return this.userRepo.getMembershipsForUser(userId); }
+  setUserDefaultTenant(userId: string, tenantId: string) { return this.userRepo.setUserDefaultTenant(userId, tenantId); }
+  getTenantListForUser(userId: string) { return this.userRepo.getTenantListForUser(userId); }
+  getUserSummary() { return this.userRepo.getUserSummary(); }
+  createWebUser(input: { userId: string; username: string; passwordHash: string; displayName: string; systemRole: "platform_admin" | "user" }) {
+    return this.userRepo.createWebUser(input);
+  }
+  updateWebUser(userId: string, patch: Parameters<UserRepo["updateWebUser"]>[1]) { return this.userRepo.updateWebUser(userId, patch); }
+  listWebUsers(limit?: number) { return this.userRepo.listWebUsers(limit); }
+  deleteWebUser(userId: string) { return this.userRepo.deleteWebUser(userId); }
+  hasPlatformAdmin() { return this.userRepo.hasPlatformAdmin(); }
+  setAdminCredentials(userId: string, username: string, passwordHash: string) {
+    return this.userRepo.setAdminCredentials(userId, username, passwordHash);
   }
 
-  async markRecovered(deviceId: string, sentAt: Date): Promise<void> {
-    await this.deviceStates.updateOne(
-      { deviceId },
-      {
-        $set: { isOffline: false, lastRecoveredAlertAt: sentAt, updatedAt: sentAt },
-        $unset: { offlineSince: "" },
-      },
-    );
-  }
+  // --- Tenants / Sites ---
+  getTenants(limit?: number) { return this.tenantRepo.getTenants(limit); }
+  getSites(limit?: number) { return this.tenantRepo.getSites(limit); }
+  getSitesForTenant(tenantId: string) { return this.tenantRepo.getSitesForTenant(tenantId); }
 
-  async clearOfflinePending(deviceId: string): Promise<void> {
-    await this.deviceStates.updateOne(
-      { deviceId },
-      { $unset: { offlineSince: "" }, $set: { updatedAt: new Date() } },
-    );
-  }
-
-  async markOfflinePending(detectionCutoff: Date): Promise<void> {
-    const now = new Date();
-    await this.deviceStates.updateMany(
-      { isOffline: false, offlineSince: { $exists: false }, lastSeenAt: { $lt: detectionCutoff } },
-      { $set: { offlineSince: now, updatedAt: now } },
-    );
-  }
-
-  async markOffline(deviceId: string, sentAt: Date): Promise<void> {
-    await this.deviceStates.updateOne(
-      { deviceId },
-      {
-        $set: { isOffline: true, lastOfflineAlertAt: sentAt, updatedAt: sentAt },
-      },
-    );
-  }
-
-  async getDevicesToAlert(alertCutoff: Date): Promise<DeviceStateRecord[]> {
-    return this.deviceStates
-      .find({
-        isOffline: false,
-        offlineSince: { $exists: true, $lt: alertCutoff },
-      })
-      .toArray();
-  }
-
-  async recordAlert(event: AlertEventRecord): Promise<void> {
-    await this.alertEvents.insertOne(event);
-  }
-
-  async createOtaJob(job: Omit<OtaJobRecord, "status" | "createdAt" | "updatedAt">): Promise<void> {
-    const now = new Date();
-    await this.otaJobs.insertOne({
-      ...job,
-      status: "queued",
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
-  async markOtaJobPublished(jobId: string): Promise<void> {
-    const now = new Date();
-    await this.otaJobs.updateOne(
-      { jobId },
-      {
-        $set: {
-          status: "published",
-          updatedAt: now,
-        },
-      },
-    );
-  }
-
-  async markOtaJobFailed(jobId: string, message: string): Promise<void> {
-    const now = new Date();
-    await this.otaJobs.updateOne(
-      { jobId },
-      {
-        $set: {
-          status: "failed",
-          lastStatusMessage: message,
-          updatedAt: now,
-          completedAt: now,
-        },
-      },
-    );
-  }
-
-  async recordOtaStatus(payload: OtaStatusPayload): Promise<void> {
-    const now = new Date();
-    const statusTimestamp = new Date(payload.timestamp);
-
-    await this.otaStatusEvents.insertOne({
-      jobId: payload.job_id,
-      deviceId: payload.device_id,
-      serialNumber: payload.serial_number,
-      status: payload.status,
-      message: payload.message,
-      currentVersion: payload.current_version,
-      targetVersion: payload.target_version,
-      timestamp: statusTimestamp,
-      receivedAt: now,
-    });
-
-    await this.otaJobs.updateOne(
-      { jobId: payload.job_id },
-      {
-        $set: {
-          status: payload.status,
-          lastStatusMessage: payload.message,
-          currentVersion: payload.current_version,
-          updatedAt: now,
-          ...(payload.status === "success" || payload.status === "failed" ? { completedAt: now } : {}),
-        },
-      },
-    );
-
-    await this.deviceStates.updateOne(
-      { deviceId: payload.device_id },
-      {
-        $set: {
-          serialNumber: payload.serial_number,
-          lastFirmwareVersion: payload.current_version,
-          lastOtaJobId: payload.job_id,
-          lastOtaStatus: payload.status,
-          lastOtaTargetVersion: payload.target_version,
-          lastOtaMessage: payload.message,
-          lastOtaUpdatedAt: now,
-          updatedAt: now,
-        },
-        $setOnInsert: {
-          deviceId: payload.device_id,
-          isOffline: false,
-          lastSeenAt: now,
-          lastTelemetryAt: statusTimestamp,
-          lastVoltage: 0,
-          lastCurrent: 0,
-          lastPower: 0,
-        },
-      },
-      { upsert: true },
-    );
-
-    await this.devices.updateOne(
-      { serialNumber: payload.serial_number },
-      {
-        $set: {
-          deviceId: payload.device_id,
-          lastFirmwareVersion: payload.current_version,
-          lastSeenAt: now,
-          updatedAt: now,
-        },
-        $setOnInsert: {
-          serialNumber: payload.serial_number,
-          claimStatus: "unclaimed",
-          lifecycleStatus: "networked_unclaimed",
-          firstSeenAt: now,
-          createdAt: now,
-        },
-      },
-      { upsert: true },
-    );
-  }
-
-  async getOtaJob(jobId: string): Promise<OtaJobRecord | null> {
-    return this.otaJobs.findOne({ jobId });
-  }
-
-  async getOtaJobs(limit = 20): Promise<OtaJobRecord[]> {
-    return this.otaJobs.find({}, { sort: { createdAt: -1 }, limit }).toArray();
-  }
-
-  async enqueueTelegramNotification(
-    type: NotificationType,
+  // --- Alerts / Notifications ---
+  recordAlert(event: Parameters<AlertRepo["recordAlert"]>[0]) { return this.alertRepo.recordAlert(event); }
+  enqueueTelegramNotification(
+    type: Parameters<AlertRepo["enqueueTelegramNotification"]>[0],
     text: string,
     payload?: Document,
     options?: { tenantId?: string; userId?: string; title?: string; targetExternalId?: string },
-  ): Promise<void> {
-    const now = new Date();
-    await this.notificationQueue.insertOne({
-      type,
-      channel: "telegram",
-      targetExternalId: options?.targetExternalId ?? config.TELEGRAM_CHAT_ID,
-      tenantId: options?.tenantId,
-      userId: options?.userId,
-      title: options?.title,
-      text,
-      payload,
-      status: "pending",
-      attemptCount: 0,
-      createdAt: now,
-      updatedAt: now,
-    });
+  ) { return this.alertRepo.enqueueTelegramNotification(type, text, payload, options); }
+  getPendingNotifications(limit?: number) { return this.alertRepo.getPendingNotifications(limit); }
+  markNotificationProcessing(notificationId: ObjectId) { return this.alertRepo.markNotificationProcessing(notificationId); }
+  markNotificationSent(notificationId: ObjectId) { return this.alertRepo.markNotificationSent(notificationId); }
+  markNotificationFailed(notificationId: ObjectId, errorMessage: string) { return this.alertRepo.markNotificationFailed(notificationId, errorMessage); }
+
+  // --- Bot sessions ---
+  getBotSession(chatId: string) { return this.botRepo.getBotSession(chatId); }
+  upsertBotSession(chatId: string, state: Document) { return this.botRepo.upsertBotSession(chatId, state); }
+  deleteBotSession(chatId: string) { return this.botRepo.deleteBotSession(chatId); }
+
+  // --- Analytics ---
+  getDeviceAnalyticsSummary(identifier: string) { return this.analyticsRepo.getDeviceAnalyticsSummary(identifier); }
+  getDeviceEnergyAnalytics(identifier: string, options: EnergyRangeOptions) {
+    return this.analyticsRepo.getDeviceEnergyAnalytics(identifier, options);
   }
 
-  async getPendingNotifications(limit = 50): Promise<NotificationQueueRecord[]> {
-    return this.notificationQueue
-      .find(
-        { $or: [{ status: "pending" }, { status: "failed", attemptCount: { $lt: 3 } }] },
-        { sort: { createdAt: 1 }, limit },
-      )
-      .toArray();
-  }
+  // --- Cross-domain aggregates ---
 
-  async getBotSession(chatId: string): Promise<BotSessionRecord | null> {
-    return this.botSessions.findOne({ chatId });
-  }
-
-  async upsertBotSession(chatId: string, state: Document): Promise<BotSessionRecord | null> {
-    const now = new Date();
-    await this.botSessions.updateOne(
-      { chatId },
-      {
-        $set: {
-          state,
-          updatedAt: now,
-        },
-        $setOnInsert: {
-          chatId,
-          createdAt: now,
-        },
-      },
-      { upsert: true },
-    );
-
-    return this.getBotSession(chatId);
-  }
-
-  async deleteBotSession(chatId: string): Promise<void> {
-    await this.botSessions.deleteOne({ chatId });
-  }
-
-  async markNotificationProcessing(notificationId: ObjectId): Promise<void> {
-    const now = new Date();
-    await this.notificationQueue.updateOne(
-      { _id: notificationId },
-      {
-        $set: {
-          status: "processing",
-          processingAt: now,
-          updatedAt: now,
-        },
-        $inc: {
-          attemptCount: 1,
-        },
-      },
-    );
-  }
-
-  async markNotificationSent(notificationId: ObjectId): Promise<void> {
-    const now = new Date();
-    await this.notificationQueue.updateOne(
-      { _id: notificationId },
-      {
-        $set: {
-          status: "sent",
-          sentAt: now,
-          updatedAt: now,
-        },
-      },
-    );
-  }
-
-  async markNotificationFailed(notificationId: ObjectId, errorMessage: string): Promise<void> {
-    const now = new Date();
-    await this.notificationQueue.updateOne(
-      { _id: notificationId },
-      {
-        $set: {
-          status: "failed",
-          lastError: errorMessage,
-          updatedAt: now,
-        },
-      },
-    );
-  }
-
-  async getDevices(limit = 50): Promise<DeviceListRecord[]> {
-    const results = await this.devices
-      .aggregate<DeviceListRecord>([
-        { $sort: { updatedAt: -1 } },
-        { $limit: limit },
-        {
-          $lookup: {
-            from: "device_states",
-            localField: "serialNumber",
-            foreignField: "serialNumber",
-            as: "state",
-          },
-        },
-        {
-          $addFields: {
-            state: { $arrayElemAt: ["$state", 0] },
-          },
-        },
-      ])
-      .toArray();
-
-    return results;
-  }
-
-  async getDeviceHealth(identifier: string): Promise<DeviceListRecord | null> {
-    const results = await this.devices
-      .aggregate<DeviceListRecord>([
-        {
-          $match: {
-            $or: [{ deviceId: identifier }, { serialNumber: identifier }],
-          },
-        },
-        {
-          $lookup: {
-            from: "device_states",
-            localField: "serialNumber",
-            foreignField: "serialNumber",
-            as: "state",
-          },
-        },
-        {
-          $addFields: {
-            state: { $arrayElemAt: ["$state", 0] },
-          },
-        },
-        { $limit: 1 },
-      ])
-      .toArray();
-
-    return results[0] ?? null;
-  }
-
-  async getDeviceAnalyticsSummary(identifier: string): Promise<DeviceAnalyticsSummary | null> {
-    const device = await this.getDeviceHealth(identifier);
-    if (!device) {
-      return null;
-    }
-
-    const site = device.siteId ? await this.sites.findOne({ siteId: device.siteId }) : null;
-    const siteTimezone = site?.timezone || DEFAULT_SITE_TIMEZONE;
-    const { dayStart, dayEnd } = getLocalDayBounds(new Date(), siteTimezone);
-    const [firstTelemetry, lastTelemetry, peakHourRows, sampleCount] = await Promise.all([
-      this.telemetry.findOne(
-        { serialNumber: device.serialNumber, timestamp: { $gte: dayStart, $lt: dayEnd } },
-        { sort: { timestamp: 1 } },
-      ),
-      this.telemetry.findOne(
-        { serialNumber: device.serialNumber, timestamp: { $gte: dayStart, $lt: dayEnd } },
-        { sort: { timestamp: -1 } },
-      ),
-      this.telemetry
-        .aggregate<{ hourStart: Date; averagePower: number }>([
-          { $match: { serialNumber: device.serialNumber, timestamp: { $gte: dayStart, $lt: dayEnd } } },
-          {
-            $group: {
-              _id: {
-                $dateTrunc: {
-                  date: "$timestamp",
-                  unit: "hour",
-                  timezone: siteTimezone,
-                },
-              },
-              averagePower: { $avg: "$power" },
-            },
-          },
-          { $project: { _id: 0, hourStart: "$_id", averagePower: 1 } },
-          { $sort: { averagePower: -1, hourStart: 1 } },
-          { $limit: 1 },
-        ])
-        .toArray(),
-      this.telemetry.countDocuments({ serialNumber: device.serialNumber, timestamp: { $gte: dayStart, $lt: dayEnd } }),
-    ]);
-
-    const messages: string[] = [];
-    let todayEnergyKwh: number | undefined;
-    let dataStatus: DeviceAnalyticsSummary["dataStatus"] = "ok";
-
-    if (!firstTelemetry || !lastTelemetry || sampleCount < 2) {
-      dataStatus = "insufficient_data";
-      messages.push("Not enough telemetry samples are available for today yet.");
-    } else {
-      const delta = lastTelemetry.energy - firstTelemetry.energy;
-      if (delta < 0) {
-        dataStatus = "counter_reset_detected";
-        messages.push("Energy counter appears to have reset during the selected day.");
-      } else {
-        todayEnergyKwh = Number(delta.toFixed(3));
-      }
-    }
-
-    if (!site?.timezone) {
-      messages.push(`Site timezone is missing, so analytics used the fallback timezone ${DEFAULT_SITE_TIMEZONE}.`);
-    }
-
-    const peakHour = peakHourRows[0];
-    return {
-      serialNumber: device.serialNumber,
-      deviceId: device.deviceId,
-      displayName: device.displayName,
-      tenantId: device.tenantId,
-      siteId: device.siteId,
-      siteTimezone,
-      dayStart,
-      dayEnd,
-      currentVoltage: device.state?.lastVoltage,
-      currentCurrent: device.state?.lastCurrent,
-      currentPower: device.state?.lastPower,
-      currentSeenAt: device.state?.lastSeenAt,
-      todayEnergyKwh,
-      peakHourStart: peakHour?.hourStart,
-      peakHourEnd: peakHour ? new Date(peakHour.hourStart.getTime() + 60 * 60 * 1000) : undefined,
-      peakHourAveragePower: peakHour ? Number(peakHour.averagePower.toFixed(1)) : undefined,
-      sampleCount,
-      dataStatus,
-      messages,
-    };
-  }
-
-  private async getValidTelemetryAtOrBefore(serialNumber: string, boundary: Date) {
-    return this.telemetry.findOne(
-      {
-        serialNumber,
-        timestamp: { $lte: boundary },
-        voltage: { $gt: MIN_VALID_VOLTAGE },
-      },
-      {
-        sort: { timestamp: -1 },
-        projection: { _id: 0, timestamp: 1, energy: 1, voltage: 1, current: 1, power: 1 },
-      },
-    );
-  }
-
-  private async getValidTelemetryAfter(serialNumber: string, boundary: Date) {
-    return this.telemetry.findOne(
-      {
-        serialNumber,
-        timestamp: { $gt: boundary, $lte: new Date(boundary.getTime() + BOUNDARY_MAX_GAP_MS) },
-        voltage: { $gt: MIN_VALID_VOLTAGE },
-      },
-      {
-        sort: { timestamp: 1 },
-        projection: { _id: 0, timestamp: 1, energy: 1, voltage: 1, current: 1, power: 1 },
-      },
-    );
-  }
-
-  private async resolveBoundaryTelemetry(serialNumber: string, boundary: Date): Promise<BoundaryResolution> {
-    const beforeSample = await this.getValidTelemetryAtOrBefore(serialNumber, boundary);
-    if (beforeSample && boundary.getTime() - beforeSample.timestamp.getTime() <= BOUNDARY_MAX_GAP_MS) {
-      return { status: "ok", sample: beforeSample, mode: "at_or_before" };
-    }
-
-    const afterSample = await this.getValidTelemetryAfter(serialNumber, boundary);
-    if (afterSample) {
-      return { status: "ok", sample: afterSample, mode: "after_fallback" };
-    }
-
-    const hourlySample = await this.getHourlyBoundary(serialNumber, boundary);
-    if (hourlySample) {
-      return { status: "ok", sample: hourlySample, mode: "hourly_fallback" };
-    }
-
-    return {
-      status: "missing",
-      reason: `Missing valid telemetry within ${Math.floor(BOUNDARY_MAX_GAP_MS / 60000)} minutes of boundary ${boundary.toISOString()}.`,
-    };
-  }
-
-  private async computeEnergyDeltaForSegment(serialNumber: string, start: Date, end: Date) {
-    const [startBoundary, endBoundary] = await Promise.all([
-      this.resolveBoundaryTelemetry(serialNumber, start),
-      this.resolveBoundaryTelemetry(serialNumber, end),
-    ]);
-
-    if (startBoundary.status === "missing") {
-      return { status: "insufficient_data" as const, message: `Missing start boundary for segment ${start.toISOString()} -> ${end.toISOString()}. ${startBoundary.reason}` };
-    }
-
-    if (endBoundary.status === "missing") {
-      return { status: "insufficient_data" as const, message: `Missing end boundary for segment ${start.toISOString()} -> ${end.toISOString()}. ${endBoundary.reason}` };
-    }
-
-    const delta = endBoundary.sample.energy - startBoundary.sample.energy;
-    if (delta < 0) {
-      return { status: "counter_reset_detected" as const, message: `Energy counter moved backwards for segment ${start.toISOString()} -> ${end.toISOString()}.` };
-    }
-
-    return {
-      status: "ok" as const,
-      delta,
-      startMode: startBoundary.mode,
-      endMode: endBoundary.mode,
-    };
-  }
-
-  private async computeEnergyForRange(serialNumber: string, range: TimeRange, timeZone: string) {
-    const segments = buildRangeSegments(range.rangeStart, range.rangeEnd, timeZone);
-    if (segments.length === 0) {
-      return { dataStatus: "insufficient_data" as const, messages: ["Selected range does not contain any time segment."], energyKwh: undefined, averageDailyKwh: undefined };
-    }
-
-    let total = 0;
-    const messages: string[] = [];
-    const segmentResults = await Promise.all(
-      segments.map((segment) => this.computeEnergyDeltaForSegment(serialNumber, segment.start, segment.end)),
-    );
-
-    for (const [i, result] of segmentResults.entries()) {
-      const segment = segments[i];
-      if (result.status === "insufficient_data") {
-        messages.push(result.message);
-        return { dataStatus: "insufficient_data" as const, messages, energyKwh: undefined, averageDailyKwh: undefined };
-      }
-
-      if (result.status === "counter_reset_detected") {
-        messages.push(result.message);
-        return { dataStatus: "counter_reset_detected" as const, messages, energyKwh: undefined, averageDailyKwh: undefined };
-      }
-
-      total += result.delta;
-      if (result.startMode === "after_fallback" || result.endMode === "after_fallback") {
-        messages.push(`Used after-boundary fallback for segment ${segment.start.toISOString()} -> ${segment.end.toISOString()}.`);
-      }
-      if (result.startMode === "hourly_fallback" || result.endMode === "hourly_fallback") {
-        messages.push(`Used hourly aggregate boundary for segment ${segment.start.toISOString()} -> ${segment.end.toISOString()}.`);
-      }
-    }
-
-    const energyKwh = Number(total.toFixed(3));
-    return {
-      dataStatus: "ok" as const,
-      messages,
-      energyKwh,
-      averageDailyKwh: Number((energyKwh / range.dayCount).toFixed(3)),
-    };
-  }
-
-  async getDeviceEnergyAnalytics(
-    identifier: string,
-    options: EnergyRangeOptions,
-  ): Promise<DeviceEnergyAnalyticsSummary | null> {
-    const device = await this.getDeviceHealth(identifier);
-    if (!device) {
-      return null;
-    }
-
-    const site = device.siteId ? await this.sites.findOne({ siteId: device.siteId }) : null;
-    const siteTimezone = site?.timezone || DEFAULT_SITE_TIMEZONE;
-    const now = new Date();
-    const range = "preset" in options
-      ? resolveEnergyPresetRange(options.preset, now, siteTimezone)
-      : resolveCustomDateRange(options.startDate, options.endDate, siteTimezone);
-
-    const [sampleCount, computed] = await Promise.all([
-      this.telemetry.countDocuments({ serialNumber: device.serialNumber, timestamp: { $gte: range.rangeStart, $lt: range.rangeEnd } }),
-      this.computeEnergyForRange(device.serialNumber, range, siteTimezone),
-    ]);
-
-    const messages = [...computed.messages];
-
-    if (!site?.timezone) {
-      messages.push(`Site timezone is missing, so analytics used the fallback timezone ${DEFAULT_SITE_TIMEZONE}.`);
-    }
-
-    return {
-      serialNumber: device.serialNumber,
-      deviceId: device.deviceId,
-      displayName: device.displayName,
-      tenantId: device.tenantId,
-      siteId: device.siteId,
-      siteTimezone,
-      rangeStart: range.rangeStart,
-      rangeEnd: range.rangeEnd,
-      preset: "preset" in options ? options.preset : undefined,
-      requestedStartDate: "startDate" in options ? options.startDate : undefined,
-      requestedEndDate: "endDate" in options ? options.endDate : undefined,
-      dayCount: range.dayCount,
-      energyKwh: computed.energyKwh,
-      averageDailyKwh: computed.averageDailyKwh,
-      sampleCount,
-      dataStatus: computed.dataStatus,
-      messages,
-    };
-  }
-
-  async getFleetSummary(): Promise<FleetSummary> {
+  async getFleetSummary() {
     const onlineCutoff = new Date(Date.now() - config.OFFLINE_TIMEOUT_SECONDS * 1000);
+    const devices = this.db.collection("devices");
+    const deviceStates = this.db.collection("device_states");
+    const users = this.db.collection("users");
+    const tenants = this.db.collection("tenants");
+    const sites = this.db.collection("sites");
+
     const [
-      devices,
+      totalDevices,
       claimedDevices,
       unclaimedDevices,
       activeDevices,
       onlineDevices,
-      users,
+      totalUsers,
       activeUsers,
-      tenants,
-      sites,
+      totalTenants,
+      totalSites,
       onlineUnclaimedDevices,
       lifecycleCounts,
     ] = await Promise.all([
-      this.devices.countDocuments({}),
-      this.devices.countDocuments({ claimStatus: "claimed" }),
-      this.devices.countDocuments({ claimStatus: "unclaimed" }),
-      this.devices.countDocuments({ lifecycleStatus: "active" }),
-      this.deviceStates.countDocuments({ lastSeenAt: { $gte: onlineCutoff } }),
-      this.users.countDocuments({}),
-      this.users.countDocuments({ status: "active" }),
-      this.tenants.countDocuments({}),
-      this.sites.countDocuments({}),
-      this.getOnlineUnclaimedDevicesCount(onlineCutoff),
-      this.devices.aggregate<{ lifecycleStatus: string; count: number }>([
+      devices.countDocuments({}),
+      devices.countDocuments({ claimStatus: "claimed" }),
+      devices.countDocuments({ claimStatus: "unclaimed" }),
+      devices.countDocuments({ lifecycleStatus: "active" }),
+      deviceStates.countDocuments({ lastSeenAt: { $gte: onlineCutoff } }),
+      users.countDocuments({}),
+      users.countDocuments({ status: "active" }),
+      tenants.countDocuments({}),
+      sites.countDocuments({}),
+      this.deviceRepo.getOnlineUnclaimedDevicesCount(onlineCutoff),
+      devices.aggregate<{ lifecycleStatus: string; count: number }>([
         { $group: { _id: "$lifecycleStatus", count: { $sum: 1 } } },
         { $project: { _id: 0, lifecycleStatus: "$_id", count: 1 } },
         { $sort: { lifecycleStatus: 1 } },
@@ -1279,1098 +223,120 @@ export class MongoService {
 
     return {
       totals: {
-        devices,
+        devices: totalDevices,
         claimedDevices,
         unclaimedDevices,
         activeDevices,
         onlineDevices,
         onlineUnclaimedDevices,
-        users,
+        users: totalUsers,
         activeUsers,
-        tenants,
-        sites,
+        tenants: totalTenants,
+        sites: totalSites,
       },
       lifecycleCounts,
     };
   }
 
-  async getUnclaimedDevices(options?: { onlineOnly?: boolean; limit?: number }): Promise<DeviceListRecord[]> {
-    const onlineOnly = options?.onlineOnly ?? false;
-    const limit = options?.limit ?? 50;
-    const onlineCutoff = new Date(Date.now() - config.OFFLINE_TIMEOUT_SECONDS * 1000);
-
-    const pipeline: Document[] = [
-      {
-        $match: {
-          claimStatus: "unclaimed",
-        },
-      },
-      {
-        $lookup: {
-          from: "device_states",
-          localField: "serialNumber",
-          foreignField: "serialNumber",
-          as: "state",
-        },
-      },
-      {
-        $addFields: {
-          state: { $arrayElemAt: ["$state", 0] },
-        },
-      },
-    ];
-
-    if (onlineOnly) {
-      pipeline.push({
-        $match: {
-          "state.lastSeenAt": { $gte: onlineCutoff },
-        },
-      });
-    }
-
-    pipeline.push({ $sort: { updatedAt: -1 } }, { $limit: limit });
-
-    return this.devices.aggregate<DeviceListRecord>(pipeline).toArray();
-  }
-
-  async identifyTelegramUser(input: {
-    externalId: string;
-    displayName?: string;
-    username?: string;
-  }): Promise<{
-    user: UserRecord;
-    memberships: Array<TenantMembershipRecord & { tenantName?: string }>;
-    requiresDefaultTenantSelection: boolean;
-  }> {
-    const now = new Date();
-    const existingIdentity = await this.channelIdentities.findOne({ provider: "telegram", externalId: input.externalId });
-
-    let userId = existingIdentity?.userId;
-    if (!userId) {
-      userId = `telegram:${input.externalId}`;
-      await this.channelIdentities.insertOne({
-        provider: "telegram",
-        externalId: input.externalId,
-        userId,
-        createdAt: now,
-        updatedAt: now,
-      });
-    } else {
-      await this.channelIdentities.updateOne(
-        { provider: "telegram", externalId: input.externalId },
-        { $set: { updatedAt: now } },
-      );
-    }
-
-    await this.users.updateOne(
-      { userId },
-      {
-        $set: {
-          status: "active",
-          displayName: input.displayName ?? input.username ?? userId,
-          lastActiveAt: now,
-          updatedAt: now,
-        },
-        $setOnInsert: {
-          userId,
-          activatedAt: now,
-          createdAt: now,
-        },
-      },
-      { upsert: true },
-    );
-
-    const user = await this.users.findOne({ userId });
-    if (!user) {
-      throw new Error("Failed to resolve user after Telegram identification");
-    }
-
-    const memberships = await this.getMembershipsForUser(userId);
-
-    if (!user.defaultTenantId && memberships.length === 1) {
-      await this.setUserDefaultTenant(userId, memberships[0].tenantId);
-      user.defaultTenantId = memberships[0].tenantId;
-    }
-
-    return {
-      user,
-      memberships,
-      requiresDefaultTenantSelection: memberships.length > 1 && !user.defaultTenantId,
-    };
-  }
-
-  async getMembershipsForUser(userId: string): Promise<Array<TenantMembershipRecord & { tenantName?: string }>> {
-    const memberships = await this.tenantMemberships.find({ userId }, { sort: { tenantId: 1 } }).toArray();
-    if (memberships.length === 0) {
-      return [];
-    }
-
-    const tenants = await this.tenants
-      .find({ tenantId: { $in: memberships.map((membership) => membership.tenantId) } })
-      .toArray();
-    const tenantNameMap = new Map(tenants.map((tenant) => [tenant.tenantId, tenant.name]));
-
-    return memberships.map((membership) => ({
-      ...membership,
-      tenantName: tenantNameMap.get(membership.tenantId),
-    }));
-  }
-
-  async setUserDefaultTenant(userId: string, tenantId: string): Promise<UserRecord | null> {
-    const membership = await this.tenantMemberships.findOne({ userId, tenantId });
-    if (!membership) {
-      throw new Error("User is not a member of the selected tenant");
-    }
-
-    const now = new Date();
-    await this.users.updateOne(
-      { userId },
-      {
-        $set: {
-          defaultTenantId: tenantId,
-          updatedAt: now,
-        },
-      },
-    );
-
-    return this.users.findOne({ userId });
-  }
-
-  async getUserById(userId: string): Promise<UserRecord | null> {
-    return this.users.findOne({ userId });
-  }
-
-  async getTenantListForUser(userId: string): Promise<TenantRecord[]> {
-    const memberships = await this.tenantMemberships.find({ userId }).toArray();
-    if (memberships.length === 0) {
-      return [];
-    }
-
-    return this.tenants.find({ tenantId: { $in: memberships.map((membership) => membership.tenantId) } }, { sort: { name: 1 } }).toArray();
-  }
-
-  async getSitesForTenant(tenantId: string): Promise<SiteRecord[]> {
-    return this.sites.find({ tenantId, status: "active" }, { sort: { name: 1 } }).toArray();
-  }
-
-  async claimDevice(input: {
-    serialNumber: string;
-    tenantId: string;
-    siteId: string;
-    ownerUserId: string;
-    displayName: string;
-  }): Promise<DeviceRecord | null> {
-    const now = new Date();
-    const existingDevice = await this.devices.findOne({ serialNumber: input.serialNumber });
-    if (!existingDevice) {
-      throw new Error("Device serial number not found");
-    }
-    if (existingDevice.claimStatus === "claimed") {
-      throw new Error("Device is already claimed");
-    }
-
-    const site = await this.sites.findOne({ siteId: input.siteId, tenantId: input.tenantId, status: "active" });
-    if (!site) {
-      throw new Error("Selected site does not belong to the tenant or is inactive");
-    }
-
-    await this.devices.updateOne(
-      { serialNumber: input.serialNumber },
-      {
-        $set: {
-          tenantId: input.tenantId,
-          siteId: input.siteId,
-          ownerUserId: input.ownerUserId,
-          displayName: input.displayName,
-          claimStatus: "claimed",
-          lifecycleStatus: "active",
-          claimedAt: now,
-          commissionedAt: existingDevice.commissionedAt ?? now,
-          updatedAt: now,
-        },
-      },
-    );
-
-    await this.deviceAssignments.insertOne({
-      serialNumber: input.serialNumber,
-      tenantId: input.tenantId,
-      siteId: input.siteId,
-      ownerUserId: input.ownerUserId,
-      assignedAt: now,
-    });
-
-    await this.auditEvents.insertOne({
-      eventType: "device.claimed",
-      actorUserId: input.ownerUserId,
-      tenantId: input.tenantId,
-      deviceSerialNumber: input.serialNumber,
-      payload: {
-        siteId: input.siteId,
-        displayName: input.displayName,
-      },
-      createdAt: now,
-    });
-
-    return this.devices.findOne({ serialNumber: input.serialNumber });
-  }
-
-  async unclaimDevice(input: { identifier: string; actorUserId: string; reason?: string }): Promise<DeviceRecord | null> {
-    const now = new Date();
-    const existingDevice = await this.devices.findOne({ $or: [{ serialNumber: input.identifier }, { deviceId: input.identifier }] });
-    if (!existingDevice) {
-      throw new Error("Device not found");
-    }
-    if (existingDevice.claimStatus === "unclaimed") {
-      throw new Error("Device is already unclaimed");
-    }
-
-    await this.devices.updateOne(
-      { serialNumber: existingDevice.serialNumber },
-      {
-        $set: {
-          claimStatus: "unclaimed",
-          lifecycleStatus: "unclaimed",
-          unclaimedAt: now,
-          updatedAt: now,
-        },
-        $unset: {
-          tenantId: "",
-          siteId: "",
-          ownerUserId: "",
-          displayName: "",
-        },
-      },
-    );
-
-    await this.deviceAssignments.updateMany(
-      { serialNumber: existingDevice.serialNumber, unassignedAt: { $exists: false } },
-      { $set: { unassignedAt: now } },
-    );
-
-    await this.auditEvents.insertOne({
-      eventType: "device.unclaimed",
-      actorUserId: input.actorUserId,
-      tenantId: existingDevice.tenantId,
-      deviceSerialNumber: existingDevice.serialNumber,
-      deviceId: existingDevice.deviceId,
-      payload: {
-        reason: input.reason,
-        previousSiteId: existingDevice.siteId,
-        previousOwnerUserId: existingDevice.ownerUserId,
-      },
-      createdAt: now,
-    });
-
-    return this.devices.findOne({ serialNumber: existingDevice.serialNumber });
-  }
-
-  async createDeviceCommand(input: {
-    commandId: string;
-    action: DeviceAction;
-    identifier: string;
-    commandTopic: string;
-    actorUserId: string;
-    reason?: string;
-  }): Promise<DeviceCommandRecord> {
-    const now = new Date();
-    const device = await this.devices.findOne({ $or: [{ serialNumber: input.identifier }, { deviceId: input.identifier }] });
-    if (!device) {
-      throw new Error("Device not found");
-    }
-
-    const command: DeviceCommandRecord = {
-      commandId: input.commandId,
-      action: input.action,
-      deviceId: device.deviceId,
-      serialNumber: device.serialNumber,
-      commandTopic: input.commandTopic,
-      status: "queued",
-      actorUserId: input.actorUserId,
-      reason: input.reason,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    await this.deviceCommands.insertOne(command);
-    await this.auditEvents.insertOne({
-      eventType: `device.command.${input.action}.queued`,
-      actorUserId: input.actorUserId,
-      tenantId: device.tenantId,
-      deviceSerialNumber: device.serialNumber,
-      deviceId: device.deviceId,
-      payload: { commandId: input.commandId, reason: input.reason, commandTopic: input.commandTopic },
-      createdAt: now,
-    });
-
-    return command;
-  }
-
-  async markDeviceCommandPublished(commandId: string): Promise<void> {
-    const now = new Date();
-    await this.deviceCommands.updateOne({ commandId }, { $set: { status: "published", updatedAt: now } });
-  }
-
-  async markDeviceCommandFailed(commandId: string, errorMessage: string): Promise<void> {
-    const now = new Date();
-    await this.deviceCommands.updateOne(
-      { commandId },
-      { $set: { status: "failed", errorMessage, updatedAt: now } },
-    );
-  }
-
-  async getDeviceCommands(limit = 50): Promise<DeviceCommandRecord[]> {
-    return this.deviceCommands.find({}, { sort: { createdAt: -1 }, limit }).toArray();
-  }
-
-  async getDevicesForTenant(tenantId: string, limit = 50): Promise<DeviceListRecord[]> {
-    return this.devices
-      .aggregate<DeviceListRecord>([
-        { $match: { tenantId } },
-        { $sort: { updatedAt: -1 } },
-        { $limit: limit },
-        {
-          $lookup: {
-            from: "device_states",
-            localField: "serialNumber",
-            foreignField: "serialNumber",
-            as: "state",
-          },
-        },
-        {
-          $addFields: {
-            state: { $arrayElemAt: ["$state", 0] },
-          },
-        },
-      ])
-      .toArray();
-  }
-
-  async getTenants(limit = 100): Promise<TenantRecord[]> {
-    return this.tenants.find({}, { sort: { name: 1 }, limit }).toArray();
-  }
-
-  async getSites(limit = 100): Promise<SiteRecord[]> {
-    return this.sites.find({}, { sort: { tenantId: 1, name: 1 }, limit }).toArray();
-  }
-
-  async getUserSummary(): Promise<UserSummary> {
-    const [users, activeUsers, invitedUsers, suspendedUsers] = await Promise.all([
-      this.users.countDocuments({}),
-      this.users.countDocuments({ status: "active" }),
-      this.users.countDocuments({ status: "invited" }),
-      this.users.countDocuments({ status: "suspended" }),
-    ]);
-
-    return {
-      totals: {
-        users,
-        activeUsers,
-        invitedUsers,
-        suspendedUsers,
-      },
-    };
-  }
-
-  async createFirmwareRelease(input: FirmwareReleaseRequest): Promise<FirmwareReleaseRecord> {
-    const now = new Date();
-    const identityFilter: Document = { version: input.version };
-    const releaseSet: Document = {
-      severity: input.severity,
-      supportStatus: input.supportStatus,
-      isActive: true,
-      releasedAt: input.releasedAt ? new Date(input.releasedAt) : now,
-      updatedAt: now,
-    };
-    const releaseSetOnInsert: Document = {
-      releaseId: `fw-${input.version}-${now.getTime()}`,
-      version: input.version,
-      createdAt: now,
-    };
-
-    for (const field of ["chipFamily", "chipModel", "boardType"] as const) {
-      if (input[field]) {
-        identityFilter[field] = input[field];
-        releaseSetOnInsert[field] = input[field];
-      } else {
-        identityFilter[field] = { $exists: false };
-      }
-    }
-
-    if (input.url) {
-      releaseSet.url = input.url;
-    }
-    if (input.sha256) {
-      releaseSet.sha256 = input.sha256;
-    }
-    if (input.notes) {
-      releaseSet.notes = input.notes;
-    }
-
-    const release: FirmwareReleaseRecord = {
-      releaseId: releaseSetOnInsert.releaseId as string,
-      version: input.version,
-      severity: input.severity,
-      supportStatus: input.supportStatus,
-      url: input.url,
-      sha256: input.sha256,
-      notes: input.notes,
-      chipFamily: input.chipFamily,
-      chipModel: input.chipModel,
-      boardType: input.boardType,
-      isActive: true,
-      releasedAt: input.releasedAt ? new Date(input.releasedAt) : now,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    await this.firmwareReleases.updateOne(
-      identityFilter,
-      {
-        $set: releaseSet,
-        $setOnInsert: releaseSetOnInsert,
-      },
-      { upsert: true },
-    );
-
-    const savedRelease = await this.firmwareReleases.findOne({ releaseId: release.releaseId });
-    if (savedRelease) {
-      return savedRelease;
-    }
-
-    const updatedRelease = await this.firmwareReleases.findOne(identityFilter);
-    if (!updatedRelease) {
-      throw new Error("Failed to save firmware release");
-    }
-
-    return updatedRelease;
-  }
-
-  async getFirmwareReleases(limit = 50): Promise<FirmwareReleaseRecord[]> {
-    return this.firmwareReleases.find({ isActive: true }, { sort: { releasedAt: -1 }, limit }).toArray();
-  }
-
-  async evaluateFirmwarePolicyForDevice(identifier: string): Promise<FirmwarePolicyEvaluation | null> {
-    const device = await this.devices.findOne({ $or: [{ serialNumber: identifier }, { deviceId: identifier }] });
-    if (!device) {
-      return null;
-    }
-
-    return this.evaluateFirmwarePolicy(device);
-  }
-
-  async getFirmwareReleaseForDevice(identifier: string, version: string): Promise<FirmwareReleaseRecord | null> {
-    const device = await this.devices.findOne({ $or: [{ serialNumber: identifier }, { deviceId: identifier }] });
-    if (!device) {
-      throw new Error("Device not found");
-    }
-
-    const releases = await this.getCompatibleFirmwareReleases(device);
-    return releases.find((release) => release.version === version) ?? null;
-  }
-
-  async evaluateFirmwarePolicyForFleet(limit = 50): Promise<FirmwarePolicyEvaluation[]> {
-    const devices = await this.devices.find({}, { sort: { updatedAt: -1 }, limit }).toArray();
-    return Promise.all(devices.map((device) => this.evaluateFirmwarePolicy(device)));
-  }
-
-  private async evaluateFirmwarePolicy(device: DeviceRecord): Promise<FirmwarePolicyEvaluation> {
-    const releases = await this.getCompatibleFirmwareReleases(device);
-    const currentVersion = device.lastFirmwareVersion;
-    const release = currentVersion ? releases.find((candidate) => candidate.version === currentVersion) : undefined;
-    const recommendedRelease = releases[0];
-
-    if (!currentVersion) {
-      return {
-        serialNumber: device.serialNumber,
-        deviceId: device.deviceId,
-        supportStatus: "unsupported",
-        severity: "required",
-        updateAvailable: Boolean(recommendedRelease),
-        latestVersion: recommendedRelease?.version,
-        recommendedRelease,
-        message: "Device has not reported a firmware version yet.",
-      };
-    }
-
-    if (!release) {
-      return {
-        serialNumber: device.serialNumber,
-        deviceId: device.deviceId,
-        currentVersion,
-        supportStatus: "unsupported",
-        severity: "required",
-        updateAvailable: Boolean(recommendedRelease && recommendedRelease.version !== currentVersion),
-        latestVersion: recommendedRelease?.version,
-        recommendedRelease,
-        message: `Firmware ${currentVersion} is not present in the release catalog.`,
-      };
-    }
-
-    const updateAvailable = Boolean(recommendedRelease && recommendedRelease.version !== currentVersion);
-    const severity = updateAvailable && recommendedRelease ? recommendedRelease.severity : release.severity;
-
-    return {
-      serialNumber: device.serialNumber,
-      deviceId: device.deviceId,
-      currentVersion,
-      supportStatus: release.supportStatus,
-      severity,
-      updateAvailable,
-      latestVersion: recommendedRelease?.version,
-      release,
-      recommendedRelease: updateAvailable ? recommendedRelease : undefined,
-      message: updateAvailable
-        ? `Firmware ${currentVersion} can be updated to ${recommendedRelease?.version}.`
-        : `Firmware ${currentVersion} is the latest compatible release.`,
-    };
-  }
-
-  private async getCompatibleFirmwareReleases(device: DeviceRecord): Promise<FirmwareReleaseRecord[]> {
-    return this.firmwareReleases
-      .find(
-        {
-          isActive: true,
-          $and: [
-            { $or: [{ chipFamily: { $exists: false } }, { chipFamily: device.chipFamily }] },
-            { $or: [{ chipModel: { $exists: false } }, { chipModel: device.chipModel }] },
-            { $or: [{ boardType: { $exists: false } }, { boardType: device.boardType }] },
-          ],
-        },
-        { sort: { releasedAt: -1 } },
-      )
-      .toArray();
-  }
-
-  private async upsertDeviceFromTelemetry(payload: TelemetryPayload): Promise<void> {
-    const now = new Date();
-    await this.reconcileDeviceIdentityFromTelemetry(payload, now);
-
-    const setFields: Partial<DeviceRecord> = {
-      deviceId: payload.device_id,
-      lastSeenAt: now,
-      lastFirmwareVersion: payload.firmware_version,
-      updatedAt: now,
-    };
-
-    if (payload.mac_address) {
-      setFields.macAddress = payload.mac_address;
-    }
-    if (payload.chip_family) {
-      setFields.chipFamily = payload.chip_family;
-    }
-    if (payload.chip_model) {
-      setFields.chipModel = payload.chip_model;
-    }
-    if (payload.board_type) {
-      setFields.boardType = payload.board_type;
-    }
-
-    await this.devices.updateOne(
-      { serialNumber: payload.serial_number },
-      {
-        $set: setFields,
-        $setOnInsert: {
-          serialNumber: payload.serial_number,
-          claimStatus: "unclaimed",
-          lifecycleStatus: "networked_unclaimed",
-          firstSeenAt: now,
-          createdAt: now,
-        },
-      },
-      { upsert: true },
-    );
-  }
-
-  private async reconcileDeviceIdentityFromTelemetry(payload: TelemetryPayload, now: Date): Promise<void> {
-    if (!payload.mac_address) {
-      return;
-    }
-
-    const existingBySerial = await this.devices.findOne({ serialNumber: payload.serial_number });
-    if (existingBySerial) {
-      return;
-    }
-
-    const existingByMac = await this.devices.findOne({ macAddress: payload.mac_address });
-    if (!existingByMac || existingByMac.serialNumber === payload.serial_number) {
-      return;
-    }
-
-    const collision = await this.devices.findOne({
-      serialNumber: payload.serial_number,
-      macAddress: { $ne: payload.mac_address },
-    });
-    if (collision) {
-      return;
-    }
-
-    const previousSerialNumber = existingByMac.serialNumber;
-    const previousDeviceId = existingByMac.deviceId;
-
-    await this.devices.updateOne(
-      { serialNumber: previousSerialNumber },
-      {
-        $set: {
-          serialNumber: payload.serial_number,
-          deviceId: payload.device_id,
-          lastSeenAt: now,
-          lastFirmwareVersion: payload.firmware_version,
-          updatedAt: now,
-        },
-      },
-    );
-
-    await this.deviceStates.updateOne(
-      { deviceId: previousDeviceId },
-      {
-        $set: {
-          deviceId: payload.device_id,
-          serialNumber: payload.serial_number,
-          updatedAt: now,
-        },
-      },
-    );
-
-    await this.deviceAssignments.updateMany(
-      { serialNumber: previousSerialNumber, unassignedAt: { $exists: false } },
-      { $set: { serialNumber: payload.serial_number } },
-    );
-
-    await this.auditEvents.insertOne({
-      eventType: "device.identity.migrated",
-      actorUserId: "system",
-      tenantId: existingByMac.tenantId,
-      deviceSerialNumber: payload.serial_number,
-      deviceId: payload.device_id,
-      payload: {
-        previousSerialNumber,
-        previousDeviceId,
-        macAddress: payload.mac_address,
-      },
-      createdAt: now,
-    });
-  }
-
-  private async getOnlineUnclaimedDevicesCount(onlineCutoff: Date): Promise<number> {
-    const results = await this.devices
-      .aggregate<{ count: number }>([
-        { $match: { claimStatus: "unclaimed" } },
-        {
-          $lookup: {
-            from: "device_states",
-            localField: "serialNumber",
-            foreignField: "serialNumber",
-            as: "state",
-          },
-        },
-        {
-          $addFields: {
-            state: { $arrayElemAt: ["$state", 0] },
-          },
-        },
-        {
-          $match: {
-            "state.lastSeenAt": { $gte: onlineCutoff },
-          },
-        },
-        { $count: "count" },
-      ])
-      .toArray();
-
-    return results[0]?.count ?? 0;
-  }
-
-  private async bootstrapPlatformAdmin(): Promise<void> {
-    const now = new Date();
-
-    await this.tenants.updateOne(
-      { tenantId: config.BOOTSTRAP_TENANT_ID },
-      {
-        $set: {
-          name: config.BOOTSTRAP_TENANT_NAME,
-          status: "active",
-          updatedAt: now,
-        },
-        $setOnInsert: {
-          tenantId: config.BOOTSTRAP_TENANT_ID,
-          createdAt: now,
-        },
-      },
-      { upsert: true },
-    );
-
-    await this.sites.updateOne(
-      { siteId: config.BOOTSTRAP_SITE_ID },
-      {
-        $set: {
-          tenantId: config.BOOTSTRAP_TENANT_ID,
-          name: config.BOOTSTRAP_SITE_NAME,
-          timezone: DEFAULT_SITE_TIMEZONE,
-          status: "active",
-          updatedAt: now,
-        },
-        $setOnInsert: {
-          siteId: config.BOOTSTRAP_SITE_ID,
-          createdAt: now,
-        },
-      },
-      { upsert: true },
-    );
-
-    await this.users.updateOne(
-      { userId: config.PLATFORM_ADMIN_USER_ID },
-      {
-        $set: {
-          displayName: config.PLATFORM_ADMIN_DISPLAY_NAME,
-          status: "active",
-          defaultTenantId: config.BOOTSTRAP_TENANT_ID,
-          activatedAt: now,
-          updatedAt: now,
-        },
-        $setOnInsert: {
-          userId: config.PLATFORM_ADMIN_USER_ID,
-          createdAt: now,
-        },
-      },
-      { upsert: true },
-    );
-
-    await this.tenantMemberships.updateOne(
-      { userId: config.PLATFORM_ADMIN_USER_ID, tenantId: config.BOOTSTRAP_TENANT_ID },
-      {
-        $set: {
-          role: "platform_admin",
-          updatedAt: now,
-        },
-        $setOnInsert: {
-          createdAt: now,
-        },
-      },
-      { upsert: true },
-    );
-
-    if (config.PLATFORM_ADMIN_TELEGRAM_ID) {
-      await this.channelIdentities.updateOne(
-        { provider: "telegram", externalId: config.PLATFORM_ADMIN_TELEGRAM_ID },
-        {
-          $set: {
-            userId: config.PLATFORM_ADMIN_USER_ID,
-            updatedAt: now,
-          },
-          $setOnInsert: {
-            createdAt: now,
-          },
-        },
-        { upsert: true },
-      );
-    }
-  }
-
-  private async bootstrapFirmwareRelease(): Promise<void> {
-    const now = new Date();
-    const filter: Document = { version: config.BOOTSTRAP_FIRMWARE_VERSION };
-    const setOnInsert: Document = {
-      releaseId: `fw-${config.BOOTSTRAP_FIRMWARE_VERSION}-bootstrap`,
-      version: config.BOOTSTRAP_FIRMWARE_VERSION,
-      releasedAt: now,
-      createdAt: now,
-    };
-    if (config.BOOTSTRAP_FIRMWARE_BOARD_TYPE) {
-      filter.boardType = config.BOOTSTRAP_FIRMWARE_BOARD_TYPE;
-      setOnInsert.boardType = config.BOOTSTRAP_FIRMWARE_BOARD_TYPE;
-    } else {
-      filter.boardType = { $exists: false };
-    }
-
-    await this.firmwareReleases.updateOne(
-      filter,
-      {
-        $set: {
-          severity: "optional",
-          supportStatus: "supported",
-          notes: "Bootstrap firmware release seeded for local and production control-plane startup.",
-          isActive: true,
-          updatedAt: now,
-        },
-        $setOnInsert: setOnInsert,
-      },
-      { upsert: true },
-    );
-  }
-
-  async getDeviceSerialNumbers(): Promise<Array<{ serialNumber: string; deviceId: string }>> {
-    const docs = await this.devices
-      .find({}, { projection: { _id: 0, serialNumber: 1, deviceId: 1 } })
-      .toArray();
-    return docs.map((doc) => ({ serialNumber: doc.serialNumber, deviceId: doc.deviceId }));
-  }
-
-  async rollupTelemetryForDevice(
-    serialNumber: string,
-    deviceId: string,
-    startHour: Date,
-    endHour: Date,
-  ): Promise<{ hoursProcessed: number; hoursSkipped: number }> {
-    const HOUR_MS = 60 * 60 * 1000;
-    const start = new Date(Math.floor(startHour.getTime() / HOUR_MS) * HOUR_MS);
-    const end = new Date(Math.floor(endHour.getTime() / HOUR_MS) * HOUR_MS);
-
-    const existing = await this.telemetryHourly
-      .find({ serialNumber, hourStart: { $gte: start, $lt: end } }, { projection: { _id: 0, hourStart: 1 } })
-      .toArray();
-    const existingSet = new Set(existing.map((r) => r.hourStart.getTime()));
-
-    let hoursProcessed = 0;
-    let hoursSkipped = 0;
-    let cursor = start;
-
-    while (cursor < end) {
-      if (existingSet.has(cursor.getTime())) {
-        hoursSkipped++;
-      } else {
-        const processed = await this.rollupOneHour(serialNumber, deviceId, cursor);
-        if (processed) hoursProcessed++;
-      }
-      cursor = new Date(cursor.getTime() + HOUR_MS);
-    }
-
-    return { hoursProcessed, hoursSkipped };
-  }
-
-  private async rollupOneHour(serialNumber: string, deviceId: string, hourStart: Date): Promise<boolean> {
-    const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
-
-    type HourAgg = {
-      firstEnergy: number;
-      lastEnergy: number;
-      firstTimestamp: Date;
-      lastTimestamp: Date;
-      avgPower: number;
-      maxPower: number;
-      avgVoltage: number;
-      minVoltage: number;
-      maxVoltage: number;
-      avgCurrent: number;
-      sampleCount: number;
-    };
-
-    const [agg] = await this.telemetry
-      .aggregate<HourAgg>([
-        { $match: { serialNumber, timestamp: { $gte: hourStart, $lt: hourEnd } } },
-        { $sort: { timestamp: 1 } },
-        {
-          $group: {
-            _id: null,
-            firstEnergy: { $first: "$energy" },
-            lastEnergy: { $last: "$energy" },
-            firstTimestamp: { $first: "$timestamp" },
-            lastTimestamp: { $last: "$timestamp" },
-            avgPower: { $avg: "$power" },
-            maxPower: { $max: "$power" },
-            avgVoltage: { $avg: "$voltage" },
-            minVoltage: { $min: "$voltage" },
-            maxVoltage: { $max: "$voltage" },
-            avgCurrent: { $avg: "$current" },
-            sampleCount: { $sum: 1 },
-          },
-        },
-      ])
-      .toArray();
-
-    if (!agg || agg.sampleCount === 0) {
-      return false;
-    }
-
-    const counterReset = agg.lastEnergy < agg.firstEnergy;
-    const energyKwh = counterReset ? undefined : Number((agg.lastEnergy - agg.firstEnergy).toFixed(3));
-    const now = new Date();
-
-    await this.telemetryHourly.updateOne(
-      { serialNumber, hourStart },
-      {
-        $set: {
-          deviceId,
-          firstEnergy: agg.firstEnergy,
-          lastEnergy: agg.lastEnergy,
-          energyKwh,
-          counterReset,
-          avgPower: Number(agg.avgPower.toFixed(2)),
-          maxPower: Number(agg.maxPower.toFixed(2)),
-          avgVoltage: Number(agg.avgVoltage.toFixed(2)),
-          minVoltage: Number(agg.minVoltage.toFixed(2)),
-          maxVoltage: Number(agg.maxVoltage.toFixed(2)),
-          avgCurrent: Number(agg.avgCurrent.toFixed(3)),
-          sampleCount: agg.sampleCount,
-          firstTimestamp: agg.firstTimestamp,
-          lastTimestamp: agg.lastTimestamp,
-          aggregatedAt: now,
-        },
-        $setOnInsert: {
-          serialNumber,
-          hourStart,
-        },
-      },
-      { upsert: true },
-    );
-
-    return true;
-  }
-
-  private async getHourlyBoundary(serialNumber: string, boundary: Date): Promise<BoundaryTelemetrySnapshot | null> {
-    const MAX_HOURLY_GAP_MS = 2 * 60 * 60 * 1000;
-
-    const before = await this.telemetryHourly.findOne(
-      { serialNumber, hourStart: { $lte: boundary }, counterReset: false },
-      { sort: { hourStart: -1 } },
-    );
-
-    if (before) {
-      const gapMs = boundary.getTime() - before.lastTimestamp.getTime();
-      if (gapMs >= 0 && gapMs <= MAX_HOURLY_GAP_MS) {
-        return {
-          timestamp: before.lastTimestamp,
-          energy: before.lastEnergy,
-          voltage: before.avgVoltage,
-          current: before.avgCurrent,
-          power: before.avgPower,
-        };
-      }
-    }
-
-    const after = await this.telemetryHourly.findOne(
-      { serialNumber, hourStart: { $gt: boundary }, counterReset: false },
-      { sort: { hourStart: 1 } },
-    );
-
-    if (after) {
-      const gapMs = after.firstTimestamp.getTime() - boundary.getTime();
-      if (gapMs >= 0 && gapMs <= MAX_HOURLY_GAP_MS) {
-        return {
-          timestamp: after.firstTimestamp,
-          energy: after.firstEnergy,
-          voltage: after.avgVoltage,
-          current: after.avgCurrent,
-          power: after.avgPower,
-        };
-      }
-    }
-
-    return null;
-  }
-
-  private async ensureIndexes(): Promise<void> {
-    await this.telemetry.createIndex({ deviceId: 1, timestamp: -1 });
-    await this.telemetry.createIndex({ serialNumber: 1, timestamp: -1 });
-    await this.devices.createIndex({ serialNumber: 1 }, { unique: true });
-    await this.devices.createIndex({ deviceId: 1 });
-    await this.devices.createIndex({ macAddress: 1 });
-    await this.devices.createIndex({ claimStatus: 1, updatedAt: -1 });
-    await this.devices.createIndex({ lifecycleStatus: 1, updatedAt: -1 });
-    await this.deviceStates.createIndex({ deviceId: 1 }, { unique: true });
-    await this.deviceStates.createIndex({ serialNumber: 1 });
-    await this.alertEvents.createIndex({ deviceId: 1, sentAt: -1 });
-    await this.users.createIndex({ userId: 1 }, { unique: true });
-    await this.tenants.createIndex({ tenantId: 1 }, { unique: true });
-    await this.sites.createIndex({ siteId: 1 }, { unique: true });
-    await this.sites.createIndex({ tenantId: 1, name: 1 });
-    await this.tenantMemberships.createIndex({ userId: 1, tenantId: 1 }, { unique: true });
-    await this.channelIdentities.createIndex({ provider: 1, externalId: 1 }, { unique: true });
-    await this.deviceAssignments.createIndex({ serialNumber: 1, assignedAt: -1 });
-    await this.deviceCommands.createIndex({ commandId: 1 }, { unique: true });
-    await this.deviceCommands.createIndex({ deviceId: 1, createdAt: -1 });
-    await this.auditEvents.createIndex({ createdAt: -1 });
-    await this.otaJobs.createIndex({ jobId: 1 }, { unique: true });
-    await this.otaJobs.createIndex({ deviceId: 1, createdAt: -1 });
-    await this.otaStatusEvents.createIndex({ jobId: 1, timestamp: -1 });
-    await this.notificationQueue.createIndex({ status: 1, createdAt: 1 });
-    await this.notificationQueue.createIndex({ channel: 1, targetExternalId: 1, createdAt: -1 });
-    await this.firmwareReleases.createIndex({ version: 1, chipFamily: 1, chipModel: 1, boardType: 1 }, { unique: true });
-    await this.firmwareReleases.createIndex({ isActive: 1, releasedAt: -1 });
-    await this.botSessions.createIndex({ chatId: 1 }, { unique: true });
-    await this.botSessions.createIndex({ updatedAt: -1 });
-    await this.telemetry.createIndex({ serialNumber: 1, timestamp: -1, voltage: 1 });
-    await this.telemetry.createIndex({ receivedAt: 1 }, { expireAfterSeconds: 95 * 24 * 3600 });
-    await this.telemetryHourly.createIndex({ serialNumber: 1, hourStart: 1 }, { unique: true });
-    await this.users.createIndex({ username: 1 }, { unique: true, sparse: true });
-  }
-
-  // --- Dashboard / Auth ---
-
-  async getUserByUsername(username: string): Promise<UserRecord | null> {
-    return this.users.findOne({ username });
-  }
-
-  async createWebUser(input: {
-    userId: string;
-    username: string;
-    passwordHash: string;
-    displayName: string;
-    systemRole: "platform_admin" | "user";
-  }): Promise<UserRecord> {
-    const now = new Date();
-    const record: UserRecord = {
-      userId: input.userId,
-      username: input.username,
-      passwordHash: input.passwordHash,
-      systemRole: input.systemRole,
-      displayName: input.displayName,
-      status: "active",
-      createdAt: now,
-      updatedAt: now,
-    };
-    await this.users.insertOne(record);
-    return record;
-  }
-
-  async updateWebUser(
-    userId: string,
-    patch: Partial<Pick<UserRecord, "displayName" | "systemRole" | "passwordHash" | "status">>,
-  ): Promise<void> {
-    await this.users.updateOne({ userId }, { $set: { ...patch, updatedAt: new Date() } });
-  }
-
-  async listWebUsers(limit = 100): Promise<UserRecord[]> {
-    return this.users
-      .find({ username: { $exists: true } }, { sort: { createdAt: -1 }, limit })
-      .toArray();
-  }
-
-  async deleteWebUser(userId: string): Promise<void> {
-    await this.users.deleteOne({ userId });
-  }
-
-  async hasPlatformAdmin(): Promise<boolean> {
-    const count = await this.users.countDocuments({ systemRole: "platform_admin" });
-    return count > 0;
-  }
-
-  async setAdminCredentials(userId: string, username: string, passwordHash: string): Promise<void> {
-    await this.users.updateOne(
-      { userId },
-      { $set: { username, passwordHash, systemRole: "platform_admin" as const, updatedAt: new Date() } },
-    );
-  }
-
-  async getDashboardStats(): Promise<{
-    totalDevices: number;
-    onlineDevices: number;
-    totalUsers: number;
-    totalTenants: number;
-  }> {
+  async getDashboardStats() {
     const onlineCutoff = new Date(Date.now() - 60 * 1000);
+    const devices = this.db.collection("devices");
+    const deviceStates = this.db.collection("device_states");
+    const users = this.db.collection("users");
+    const tenants = this.db.collection("tenants");
+
     const [totalDevices, onlineDevices, totalUsers, totalTenants] = await Promise.all([
-      this.devices.countDocuments({}),
-      this.deviceStates.countDocuments({ isOffline: false, lastSeenAt: { $gte: onlineCutoff } }),
-      this.users.countDocuments({ username: { $exists: true } }),
-      this.tenants.countDocuments({}),
+      devices.countDocuments({}),
+      deviceStates.countDocuments({ isOffline: false, lastSeenAt: { $gte: onlineCutoff } }),
+      users.countDocuments({ username: { $exists: true } }),
+      tenants.countDocuments({}),
     ]);
     return { totalDevices, onlineDevices, totalUsers, totalTenants };
   }
 
-  async getRecentTelemetry(serialNumber: string, limit = 20): Promise<TelemetryRecord[]> {
-    return this.telemetry
-      .find({ serialNumber }, { sort: { timestamp: -1 }, limit })
-      .toArray();
+  private async bootstrapPlatformAdmin(): Promise<void> {
+    const now = new Date();
+    await this.tenantRepo.bootstrapTenantAndSite(
+      config.BOOTSTRAP_TENANT_ID,
+      config.BOOTSTRAP_TENANT_NAME,
+      config.BOOTSTRAP_SITE_ID,
+      config.BOOTSTRAP_SITE_NAME,
+      DEFAULT_SITE_TIMEZONE,
+      now,
+    );
+    await this.userRepo.bootstrapUser(
+      config.PLATFORM_ADMIN_USER_ID,
+      config.PLATFORM_ADMIN_DISPLAY_NAME,
+      config.BOOTSTRAP_TENANT_ID,
+      config.BOOTSTRAP_TENANT_ID,
+      config.PLATFORM_ADMIN_TELEGRAM_ID,
+      now,
+    );
+  }
+
+  private async bootstrapFirmwareRelease(): Promise<void> {
+    await this.otaRepo.bootstrapFirmwareRelease(
+      config.BOOTSTRAP_FIRMWARE_VERSION,
+      config.BOOTSTRAP_FIRMWARE_BOARD_TYPE,
+      new Date(),
+    );
+  }
+
+  private async ensureIndexes(): Promise<void> {
+    const telemetry = this.db.collection("telemetry");
+    const devices = this.db.collection("devices");
+    const deviceStates = this.db.collection("device_states");
+    const alertEvents = this.db.collection("alert_events");
+    const users = this.db.collection("users");
+    const tenants = this.db.collection("tenants");
+    const sites = this.db.collection("sites");
+    const tenantMemberships = this.db.collection("tenant_memberships");
+    const channelIdentities = this.db.collection("channel_identities");
+    const deviceAssignments = this.db.collection("device_assignments");
+    const deviceCommands = this.db.collection("device_commands");
+    const auditEvents = this.db.collection("audit_events");
+    const otaJobs = this.db.collection("ota_jobs");
+    const otaStatusEvents = this.db.collection("ota_status_events");
+    const notificationQueue = this.db.collection("notification_queue");
+    const firmwareReleases = this.db.collection("firmware_releases");
+    const botSessions = this.db.collection("bot_sessions");
+    const telemetryHourly = this.db.collection("telemetry_hourly");
+
+    await Promise.all([
+      telemetry.createIndex({ deviceId: 1, timestamp: -1 }),
+      telemetry.createIndex({ serialNumber: 1, timestamp: -1 }),
+      telemetry.createIndex({ serialNumber: 1, timestamp: -1, voltage: 1 }),
+      telemetry.createIndex({ receivedAt: 1 }, { expireAfterSeconds: 95 * 24 * 3600 }),
+      devices.createIndex({ serialNumber: 1 }, { unique: true }),
+      devices.createIndex({ deviceId: 1 }),
+      devices.createIndex({ macAddress: 1 }),
+      devices.createIndex({ claimStatus: 1, updatedAt: -1 }),
+      devices.createIndex({ lifecycleStatus: 1, updatedAt: -1 }),
+      deviceStates.createIndex({ deviceId: 1 }, { unique: true }),
+      deviceStates.createIndex({ serialNumber: 1 }),
+      alertEvents.createIndex({ deviceId: 1, sentAt: -1 }),
+      users.createIndex({ userId: 1 }, { unique: true }),
+      users.createIndex({ username: 1 }, { unique: true, sparse: true }),
+      tenants.createIndex({ tenantId: 1 }, { unique: true }),
+      sites.createIndex({ siteId: 1 }, { unique: true }),
+      sites.createIndex({ tenantId: 1, name: 1 }),
+      tenantMemberships.createIndex({ userId: 1, tenantId: 1 }, { unique: true }),
+      channelIdentities.createIndex({ provider: 1, externalId: 1 }, { unique: true }),
+      deviceAssignments.createIndex({ serialNumber: 1, assignedAt: -1 }),
+      deviceCommands.createIndex({ commandId: 1 }, { unique: true }),
+      deviceCommands.createIndex({ deviceId: 1, createdAt: -1 }),
+      auditEvents.createIndex({ createdAt: -1 }),
+      otaJobs.createIndex({ jobId: 1 }, { unique: true }),
+      otaJobs.createIndex({ deviceId: 1, createdAt: -1 }),
+      otaStatusEvents.createIndex({ jobId: 1, timestamp: -1 }),
+      notificationQueue.createIndex({ status: 1, createdAt: 1 }),
+      notificationQueue.createIndex({ channel: 1, targetExternalId: 1, createdAt: -1 }),
+      firmwareReleases.createIndex({ version: 1, chipFamily: 1, chipModel: 1, boardType: 1 }, { unique: true }),
+      firmwareReleases.createIndex({ isActive: 1, releasedAt: -1 }),
+      botSessions.createIndex({ chatId: 1 }, { unique: true }),
+      botSessions.createIndex({ updatedAt: -1 }),
+      telemetryHourly.createIndex({ serialNumber: 1, hourStart: 1 }, { unique: true }),
+    ]);
   }
 }
 
