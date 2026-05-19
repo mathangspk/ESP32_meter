@@ -310,39 +310,39 @@ export async function parseAnalyticsIntent(question: string): Promise<AnalyticsI
 function fallbackParseInventoryIntent(question: string): InventoryIntent {
   const text = question.toLowerCase();
   const asksSpecificDeviceDetail =
-    text.includes("thÃ´ng tin thiáº¿t bá»‹") ||
+    text.includes("thông tin thiết bị") ||
     text.includes("thong tin thiet bi") ||
-    text.includes("thÃ´ng tin device") ||
+    text.includes("thông tin device") ||
     text.includes("thong tin device") ||
-    text.includes("xem thiáº¿t bá»‹") ||
+    text.includes("xem thiết bị") ||
     text.includes("xem thiet bi") ||
     text.startsWith("xem ") ||
     text.startsWith("toi muon xem ");
   const asksMeasurement =
-    text.includes("giÃ¡ trá»‹") ||
+    text.includes("giá trị") ||
     text.includes("gia tri") ||
-    text.includes("hiá»‡n táº¡i") ||
+    text.includes("hiện tại") ||
     text.includes("hien tai") ||
-    text.includes("Ä‘iá»‡n Ã¡p") ||
+    text.includes("điện áp") ||
     text.includes("dien ap") ||
-    text.includes("cÃ´ng suáº¥t") ||
+    text.includes("công suất") ||
     text.includes("cong suat") ||
-    text.includes("dÃ²ng") ||
+    text.includes("dòng") ||
     text.includes("dong") ||
     text.includes("current") ||
     text.includes("power") ||
     text.includes("voltage");
-  const asksCount = text.includes("bao nhiÃªu thiáº¿t bá»‹") || text.includes("bao nhieu thiet bi") || text.includes("how many devices");
+  const asksCount = text.includes("bao nhiêu thiết bị") || text.includes("bao nhieu thiet bi") || text.includes("how many devices");
   const asksNames =
-    text.includes("tÃªn gÃ¬") ||
+    text.includes("tên gì") ||
     text.includes("ten gi") ||
-    text.includes("thiáº¿t bá»‹ nÃ o") ||
+    text.includes("thiết bị nào") ||
     text.includes("thiet bi nao") ||
-    text.includes("danh sÃ¡ch thiáº¿t bá»‹") ||
+    text.includes("danh sách thiết bị") ||
     text.includes("danh sach thiet bi") ||
     text.includes("list devices") ||
     text.includes("device names");
-  const asksManagedScope = text.includes("quáº£n lÃ½") || text.includes("quan ly") || text.includes("my devices") || text.includes("managed devices");
+  const asksManagedScope = text.includes("quản lý") || text.includes("quan ly") || text.includes("my devices") || text.includes("managed devices");
 
   if (asksMeasurement || asksSpecificDeviceDetail) {
     return { intent: "unknown", confidence: 0 };
@@ -464,25 +464,25 @@ function buildAnalyticsFacts(intent: AnalyticsIntent["intent"], summary: Analyti
     case "get_peak_hour": {
       const analyticsSummary = summary as AnalyticsSummary;
       if (!analyticsSummary.peakHourStart || !analyticsSummary.peakHourEnd || analyticsSummary.peakHourAveragePower === undefined) {
-        return `${label}: chÆ°a Ä‘á»§ dá»¯ liá»‡u Ä‘á»ƒ xÃ¡c Ä‘á»‹nh khung giá» cÃ³ cÃ´ng suáº¥t trung bÃ¬nh cao nháº¥t hÃ´m nay theo mÃºi giá» ${analyticsSummary.siteTimezone}. ${analyticsSummary.messages.join(" ")}`.trim();
+        return `${label}: chưa đủ dữ liệu để xác định khung giờ có công suất trung bình cao nhất hôm nay theo múi giờ ${analyticsSummary.siteTimezone}. ${analyticsSummary.messages.join(" ")}`.trim();
       }
-      return `${label}: hÃ´m nay khung giá» cÃ³ cÃ´ng suáº¥t trung bÃ¬nh cao nháº¥t lÃ  ${formatTimeRange(analyticsSummary.peakHourStart, analyticsSummary.peakHourEnd, analyticsSummary.siteTimezone)} theo mÃºi giá» ${analyticsSummary.siteTimezone}, vá»›i cÃ´ng suáº¥t trung bÃ¬nh ${analyticsSummary.peakHourAveragePower.toFixed(1)} W.`;
+      return `${label}: hôm nay khung giờ có công suất trung bình cao nhất là ${formatTimeRange(analyticsSummary.peakHourStart, analyticsSummary.peakHourEnd, analyticsSummary.siteTimezone)} theo múi giờ ${analyticsSummary.siteTimezone}, với công suất trung bình ${analyticsSummary.peakHourAveragePower.toFixed(1)} W.`;
     }
     case "get_current_voltage": {
       const analyticsSummary = summary as AnalyticsSummary;
-      return `${label}: Ä‘iá»‡n Ã¡p hiá»‡n táº¡i lÃ  ${analyticsSummary.currentVoltage?.toFixed(1) ?? "khÃ´ng rÃµ"} V.`;
+      return `${label}: điện áp hiện tại là ${analyticsSummary.currentVoltage?.toFixed(1) ?? "không rõ"} V.`;
     }
     case "get_current_current": {
       const analyticsSummary = summary as AnalyticsSummary;
-      return `${label}: dÃ²ng Ä‘iá»‡n hiá»‡n táº¡i lÃ  ${analyticsSummary.currentCurrent?.toFixed(3) ?? "khÃ´ng rÃµ"} A.`;
+      return `${label}: dòng điện hiện tại là ${analyticsSummary.currentCurrent?.toFixed(3) ?? "không rõ"} A.`;
     }
     case "get_current_power": {
       const analyticsSummary = summary as AnalyticsSummary;
-      return `${label}: cÃ´ng suáº¥t hiá»‡n táº¡i lÃ  ${analyticsSummary.currentPower?.toFixed(1) ?? "khÃ´ng rÃµ"} W.`;
+      return `${label}: công suất hiện tại là ${analyticsSummary.currentPower?.toFixed(1) ?? "không rõ"} W.`;
     }
     case "get_current_summary": {
       const analyticsSummary = summary as AnalyticsSummary;
-      return `${label}: Ä‘iá»‡n Ã¡p hiá»‡n táº¡i lÃ  ${analyticsSummary.currentVoltage?.toFixed(1) ?? "khÃ´ng rÃµ"} V, dÃ²ng Ä‘iá»‡n hiá»‡n táº¡i lÃ  ${analyticsSummary.currentCurrent?.toFixed(3) ?? "khÃ´ng rÃµ"} A vÃ  cÃ´ng suáº¥t hiá»‡n táº¡i lÃ  ${analyticsSummary.currentPower?.toFixed(1) ?? "khÃ´ng rÃµ"} W.`;
+      return `${label}: điện áp hiện tại là ${analyticsSummary.currentVoltage?.toFixed(1) ?? "không rõ"} V, dòng điện hiện tại là ${analyticsSummary.currentCurrent?.toFixed(3) ?? "không rõ"} A và công suất hiện tại là ${analyticsSummary.currentPower?.toFixed(1) ?? "không rõ"} W.`;
     }
     default:
       return `${label}: ${summary.messages.join(" ")}`.trim();
