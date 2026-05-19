@@ -4,6 +4,40 @@
 
 System stable and fully deployed. Codebase refactoring in progress for maintainability.
 
+## Session Delta (2026-05-20)
+
+### What Changed
+
+1. **`assistant-bot/src/index.ts` split into focused modules** (completed, deployed)
+   - `index.ts` (1494 lines) → 8 modules + thin 144-line main loop:
+     - `formatters.ts` — all format* functions, previewText, getActionLabel
+     - `nlu.ts` — normalizeVietnameseText and all parse*/looksLike* (pure functions, no I/O)
+     - `session.ts` — PendingState type + getPendingState/setPendingState/clearPendingState
+     - `device-resolver.ts` — isPlatformAdmin, resolveAccessibleDevice, canManageDevice
+     - `handlers/analytics.ts` — handleAnalyticsQuestion
+     - `handlers/device.ts` — handleDeviceDetailQuestion, handleFirmwareVersionQuestion, handleNaturalLanguageDeviceAction, handleInventoryQuestion
+     - `handlers/pending.ts` — ensureDefaultTenant, handleClaimFlow, handleDeviceActionConfirmation, handleOtaConfirmation
+     - `handlers/commands.ts` — handleCommand, handleNaturalLanguage dispatch
+   - `telegram.ts` updated: now exports logged `sendMessage` (was raw API only)
+   - Fixed pre-existing `groq.ts` bug: missing `content:` key on system message in `parseInventoryIntent`
+   - TypeScript typecheck: 0 errors
+   - Deployed to VPS: CI built image, pulled and restarted — confirmed healthy
+
+2. **Fixed pre-existing UTF-8 encoding bug in `groq.ts`** (completed, deployed)
+   - 19 Vietnamese string literals in `buildAnalyticsFacts()` and `fallbackParseInventoryIntent()` were triple-encoded (UTF-8 bytes re-encoded twice as CP1252)
+   - Caused garbled text in all Telegram responses (e.g. `Ä'iá»‡n Ã¡p` instead of `điện áp`)
+   - Also broke pattern matching in `fallbackParseInventoryIntent` — Vietnamese keyword checks never matched
+   - Fixed by writing correct UTF-8 bytes directly via Python byte-level replacement
+   - TypeScript typecheck: 0 errors
+
+### Confirmed Working After Deploy
+
+- assistant-bot container started cleanly, 0 errors in logs
+- All 5 containers remain Up
+- Vietnamese text in bot responses now renders correctly
+
+---
+
 ## Session Delta (2026-05-19 — part 3)
 
 ### What Changed
@@ -178,12 +212,11 @@ Stable operation. All planned optimizations deployed.
 
 ## Next Recommended Steps
 
-1. **Codebase refactor — Domain 3**: `alerts.ts` is straightforward; next meaningful target is `assistant-bot/src/telegram.ts` (large NLU dispatch file) — split into intent handlers.
-2. **Telegram role scoping**: Restrict OTA/admin commands by `systemRole`; scope device commands by tenant membership.
-3. **Self-service claim flow**: User enters serial number in Telegram → claims device to their account.
-4. **Optional**: `/peak_day` intent + backend endpoint for `"Ngày dùng nhiều điện nhất trong tuần"`.
-5. **Optional**: Hourly breakdown endpoint for `"bảng theo giờ"` questions.
-6. **Monitor**: Watch alert behavior on next device restart — confirm no spam with 2-min delay.
+1. **Telegram role scoping**: Restrict OTA/admin commands by `systemRole`; scope device commands by tenant membership.
+2. **Self-service claim flow**: User enters serial number in Telegram → claims device to their account.
+3. **Optional**: `/peak_day` intent + backend endpoint for `"Ngày dùng nhiều điện nhất trong tuần"`.
+4. **Optional**: Hourly breakdown endpoint for `"bảng theo giờ"` questions.
+5. **Monitor**: Watch alert behavior on next device restart — confirm no spam with 2-min delay.
 
 ## Known Constraints
 
@@ -222,12 +255,9 @@ git tag fw-v1.0.2 && git push origin fw-v1.0.2
 ssh vps-prod "curl -sS http://127.0.0.1:3000/devices/7B34E3EC/firmware-policy"
 ```
 
-## Last Verified Result (2026-05-19)
+## Last Verified Result (2026-05-20)
 
-- Backend healthz: `{"status":"ok","mqttConnected":true,"mongodbConnected":true}`
-- Backend image: `sha256:8e330eca` (mongodb domain split, CI commit `46cbcc2`)
 - All 5 containers Up (mosquitto, mongodb, backend, assistant-bot, frontend), 0 restarts
-- Dashboard login verified: `admin` → JWT `systemRole: platform_admin`
-- Frontend HTTP 200 at port 8080
-- GHCR pull working from VPS with PAT auth
-- TypeScript typecheck: 0 errors on full backend codebase
+- assistant-bot responding correctly in Vietnamese (encoding bug fixed)
+- TypeScript typecheck: 0 errors on full assistant-bot codebase
+- Backend healthz: `{"status":"ok","mqttConnected":true,"mongodbConnected":true}`
