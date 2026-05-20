@@ -3,7 +3,7 @@ import { parseInventoryIntent } from "../groq";
 import { logger } from "../logger";
 import { sendMessage } from "../telegram";
 import { previewText, formatSingleDevice, formatFirmwarePolicy, getActionLabel, buildDeviceActionConfirmation } from "../formatters";
-import { resolveAccessibleDevice, getAccessibleDevices, canManageDevice } from "../device-resolver";
+import { resolveAccessibleDevice, getAccessibleDevices, canPerformDeviceAction } from "../device-resolver";
 import { setPendingState } from "../session";
 import {
   looksLikeDeviceDetailQuestion,
@@ -157,9 +157,9 @@ export async function handleNaturalLanguageDeviceAction(chatId: number, text: st
     return true;
   }
 
-  const allowed = await canManageDevice(device.serialNumber, user.defaultTenantId, memberships);
+  const allowed = await canPerformDeviceAction(parsed.action, device.serialNumber, user.defaultTenantId, memberships);
   if (!allowed) {
-    await sendMessage(chatId, "You do not have permission to manage this device.");
+    await sendMessage(chatId, "Ban khong co quyen thuc hien thao tac nay voi thiet bi.");
     return true;
   }
 

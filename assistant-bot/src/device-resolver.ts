@@ -67,15 +67,33 @@ export async function resolveCommandDeviceIdentifier(
   return device.serialNumber;
 }
 
-export async function canManageDevice(identifier: string, userDefaultTenantId: string | undefined, memberships: Membership[]): Promise<boolean> {
-  if (isPlatformAdmin(memberships)) {
-    return true;
-  }
+export async function canPerformDeviceAction(
+  action: "reboot" | "remove" | "factory_reset",
+  identifier: string,
+  userDefaultTenantId: string | undefined,
+  memberships: Membership[],
+): Promise<boolean> {
+  if (isPlatformAdmin(memberships)) return true;
 
-  if (!userDefaultTenantId) {
-    return false;
-  }
+  // factory_reset is platform_admin only
+  if (action === "factory_reset") return false;
+
+  if (!userDefaultTenantId) return false;
 
   const device = await backendClient.getDeviceHealth(identifier);
-  return device.tenantId === userDefaultTenantId;
+  if (device.tenantId !== userDefaultTenantId) return false;
+
+  const tenantMembership = memberships.find((m) => m.tenantId === userDefaultTenantId);
+  if (!tenantMembership) return false;
+
+  if (action === "remove") {
+    return tenantMembership.role === "tenant_admin";
+  }
+
+  // reboot: site_operator or tenant_admin
+  return tenantMembership.role === "tenant_admin" || tenantMembership.role === "site_operator";
+}
+
+export function canPerformOta(memberships: Membership[]): boolean {
+  return isPlatformAdmin(memberships);
 }

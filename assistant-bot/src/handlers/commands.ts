@@ -2,7 +2,7 @@ import { backendClient, Membership } from "../backend-client";
 import { askGroq } from "../groq";
 import { logger } from "../logger";
 import { sendMessage } from "../telegram";
-import { isPlatformAdmin, resolveCommandDeviceIdentifier, canManageDevice, getAccessibleDevices } from "../device-resolver";
+import { isPlatformAdmin, resolveCommandDeviceIdentifier, canPerformDeviceAction, canPerformOta, getAccessibleDevices } from "../device-resolver";
 import { setPendingState } from "../session";
 import {
   formatMemberships,
@@ -289,9 +289,15 @@ export async function handleCommand(chatId: number, text: string, userId: string
           return;
         }
 
-        const allowed = await canManageDevice(resolvedIdentifier, user.defaultTenantId, refreshedMemberships);
+        const allowed = await canPerformDeviceAction(action, resolvedIdentifier, user.defaultTenantId, refreshedMemberships);
         if (!allowed) {
-          await sendMessage(chatId, "You do not have permission to manage this device.");
+          const denialMessage =
+            action === "factory_reset"
+              ? "Chi platform admin moi co the thuc hien factory reset."
+              : action === "remove"
+                ? "Can quyen tenant admin tro len de xoa thiet bi."
+                : "Ban can quyen site operator tro len de reboot thiet bi.";
+          await sendMessage(chatId, denialMessage);
           return;
         }
 
@@ -326,9 +332,8 @@ export async function handleCommand(chatId: number, text: string, userId: string
           return;
         }
 
-        const allowed = await canManageDevice(resolvedIdentifier, user.defaultTenantId, refreshedMemberships);
-        if (!allowed) {
-          await sendMessage(chatId, "You do not have permission to update this device.");
+        if (!canPerformOta(refreshedMemberships)) {
+          await sendMessage(chatId, "Chi platform admin moi co the cap nhat firmware.");
           return;
         }
 
