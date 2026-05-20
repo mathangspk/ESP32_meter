@@ -11,6 +11,8 @@ const analyticsIntentSchema = z.object({
     "get_this_month_energy",
     "get_last_month_energy",
     "get_date_range_energy",
+    "get_peak_day",
+    "get_hourly_breakdown",
     "get_peak_hour",
     "get_current_voltage",
     "get_current_current",
@@ -21,6 +23,7 @@ const analyticsIntentSchema = z.object({
   identifier: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  targetDate: z.string().optional(),
   confidence: z.number().min(0).max(1).optional(),
 });
 
@@ -60,6 +63,34 @@ type EnergyAnalyticsSummary = {
   dayCount: number;
   energyKwh?: number;
   averageDailyKwh?: number;
+  dataStatus: string;
+  messages: string[];
+};
+
+type PeakDaySummary = {
+  displayName?: string;
+  serialNumber: string;
+  siteTimezone: string;
+  peakDate?: string;
+  peakDayEnergyKwh?: number;
+  dailyBreakdown: Array<{ date: string; energyKwh?: number; dataStatus: string }>;
+  dataStatus: string;
+  messages: string[];
+};
+
+type HourlyBreakdown = {
+  displayName?: string;
+  serialNumber: string;
+  siteTimezone: string;
+  date: string;
+  hours: Array<{
+    localHour: number;
+    energyKwh?: number;
+    avgPower: number;
+    maxPower: number;
+    counterReset: boolean;
+  }>;
+  totalEnergyKwh?: number;
   dataStatus: string;
   messages: string[];
 };
@@ -263,6 +294,25 @@ function fallbackParseAnalyticsIntent(question: string): AnalyticsIntent {
     return { intent: "get_current_power", identifier, confidence: 0.5 };
   }
 
+  if (
+    (text.includes("ngay nao") || text.includes("ngay nhieu nhat") || text.includes("nhieu dien nhat")) &&
+    (text.includes("tuan") || text.includes("7 ngay") || text.includes("week")) &&
+    asksEnergy(text)
+  ) {
+    return { intent: "get_peak_day", identifier, confidence: 0.6 };
+  }
+
+  if (
+    text.includes("theo gio") ||
+    text.includes("bang gio") ||
+    text.includes("tung gio") ||
+    text.includes("hourly") ||
+    text.includes("gio nao dung bao nhieu")
+  ) {
+    const targetDate = text.includes("hom qua") || text.includes("yesterday") ? "yesterday" : "today";
+    return { intent: "get_hourly_breakdown", identifier, targetDate, confidence: 0.6 };
+  }
+
   return { intent: "unknown", confidence: 0 };
 }
 
@@ -289,7 +339,7 @@ export async function parseAnalyticsIntent(question: string): Promise<AnalyticsI
       {
         role: "system",
         content:
-          "You classify natural-language analytics questions for an IoT power meter assistant. Return only one JSON object with keys: intent, identifier, startDate, endDate, confidence. Valid intents are get_today_energy, get_yesterday_energy, get_last_7_days_energy, get_this_week_energy, get_last_week_energy, get_this_month_energy, get_last_month_energy, get_date_range_energy, get_peak_hour, get_current_voltage, get_current_current, get_current_power, get_current_summary, unknown. Use get_date_range_energy only when user explicitly gives start and end dates. Dates must use YYYY-MM-DD. If user gives dd/mm without year, use current year. Use get_current_summary for generic requests like current value or current readings. Only set identifier when user clearly names serial number, device ID, or display name. Do not invent data.",
+          "You classify natural-language analytics questions for an IoT power meter assistant. Return only one JSON object with keys: intent, identifier, startDate, endDate, targetDate, confidence. Valid intents are get_today_energy, get_yesterday_energy, get_last_7_days_energy, get_this_week_energy, get_last_week_energy, get_this_month_energy, get_last_month_energy, get_date_range_energy, get_peak_day, get_hourly_breakdown, get_peak_hour, get_current_voltage, get_current_current, get_current_power, get_current_summary, unknown. Use get_date_range_energy only when user explicitly gives start and end dates. Dates must use YYYY-MM-DD. If user gives dd/mm without year, use current year. Use get_current_summary for generic requests like current value or current readings. Only set identifier when user clearly names serial number, device ID, or display name. Do not invent data. Use get_peak_day when the user asks which day had the highest energy usage in the past week. Use get_hourly_breakdown when the user asks for an hourly breakdown table (set targetDate to today, yesterday, or YYYY-MM-DD based on context; default to today).",
       },
       {
         role: "user",
@@ -434,7 +484,7 @@ function formatDateRangeLabel(summary: EnergyAnalyticsSummary) {
   return "khoang da chon";
 }
 
-function buildAnalyticsFacts(intent: AnalyticsIntent["intent"], summary: AnalyticsSummary | EnergyAnalyticsSummary) {
+function buildAnalyticsFacts(intent: AnalyticsIntent["intent"], summary: AnalyticsSummary | EnergyAnalyticsSummary | PeakDaySummary | HourlyBreakdown) {
   const label = summary.displayName ?? summary.serialNumber;
   switch (intent) {
     case "get_today_energy":
@@ -484,13 +534,32 @@ function buildAnalyticsFacts(intent: AnalyticsIntent["intent"], summary: Analyti
       const analyticsSummary = summary as AnalyticsSummary;
       return `${label}: điện áp hiện tại là ${analyticsSummary.currentVoltage?.toFixed(1) ?? "không rõ"} V, dòng điện hiện tại là ${analyticsSummary.currentCurrent?.toFixed(3) ?? "không rõ"} A và công suất hiện tại là ${analyticsSummary.currentPower?.toFixed(1) ?? "không rõ"} W.`;
     }
+    case "get_peak_day": {
+      const s = summary as PeakDaySummary;
+      if (!s.peakDate || s.peakDayEnergyKwh === undefined) {
+        return `${label}: chua du du lieu de xac dinh ngay dung nhieu nhat trong 7 ngay qua. Mui gio ${s.siteTimezone}.`;
+      }
+      const [y, m, d] = s.peakDate.split("-");
+      return `${label}: trong 7 ngay qua, ngay dung dien nhieu nhat la ${d}/${m}/${y} voi ${s.peakDayEnergyKwh.toFixed(3)} kWh. Mui gio ${s.siteTimezone}.`;
+    }
+    case "get_hourly_breakdown": {
+      const s = summary as HourlyBreakdown;
+      if (s.dataStatus === "no_data" || s.hours.length === 0) {
+        return `${label}: khong co du lieu theo gio cho ngay ${s.date}. Mui gio ${s.siteTimezone}.`;
+      }
+      const lines = s.hours
+        .filter((h) => !h.counterReset)
+        .map((h) => `${String(h.localHour).padStart(2, "0")}:00: ${h.energyKwh !== undefined ? h.energyKwh.toFixed(3) + " kWh" : "N/A"}, ${h.avgPower.toFixed(1)} W`);
+      const total = s.totalEnergyKwh !== undefined ? `Tong: ${s.totalEnergyKwh.toFixed(3)} kWh` : "";
+      return [`${label} - bang dien theo gio ngay ${s.date} (${s.siteTimezone}):`, ...lines, total].filter(Boolean).join("\n");
+    }
     default:
       return `${label}: ${summary.messages.join(" ")}`.trim();
   }
 }
 
 export async function renderAnalyticsAnswer(question: string, intent: AnalyticsIntent["intent"], summary: unknown): Promise<string | null> {
-  const facts = buildAnalyticsFacts(intent, summary as AnalyticsSummary | EnergyAnalyticsSummary);
+  const facts = buildAnalyticsFacts(intent, summary as AnalyticsSummary | EnergyAnalyticsSummary | PeakDaySummary | HourlyBreakdown);
   return facts;
 }
 

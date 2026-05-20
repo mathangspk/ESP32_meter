@@ -362,3 +362,45 @@ export type UserSummary = {
     suspendedUsers: number;
   };
 };
+
+export type DevicePeakDaySummary = {
+  serialNumber: string;
+  deviceId: string;
+  displayName?: string;
+  tenantId?: string;
+  siteId?: string;
+  siteTimezone: string;
+  rangeStart: Date;
+  rangeEnd: Date;
+  peakDate?: string;
+  peakDayStart?: Date;
+  peakDayEnd?: Date;
+  peakDayEnergyKwh?: number;
+  dailyBreakdown: Array<{ date: string; energyKwh?: number; dataStatus: string }>;
+  dataStatus: "ok" | "insufficient_data" | "counter_reset_detected" | "no_valid_days";
+  messages: string[];
+};
+
+export type DeviceHourlyBreakdown = {
+  serialNumber: string;
+  deviceId: string;
+  displayName?: string;
+  tenantId?: string;
+  siteId?: string;
+  siteTimezone: string;
+  date: string;
+  dayStart: Date;
+  dayEnd: Date;
+  hours: Array<{
+    hourStart: Date;
+    localHour: number;
+    energyKwh?: number;
+    avgPower: number;
+    maxPower: number;
+    sampleCount: number;
+    counterReset: boolean;
+  }>;
+  totalEnergyKwh?: number;
+  dataStatus: "ok" | "no_data" | "partial_data";
+  messages: string[];
+};

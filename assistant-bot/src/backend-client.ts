@@ -17,6 +17,8 @@ const userSchema = z.object({
 
 export type BotUser = z.infer<typeof userSchema>;
 export type Membership = z.infer<typeof membershipSchema>;
+export type DevicePeakDaySummary = z.infer<typeof devicePeakDaySummarySchema>;
+export type DeviceHourlyBreakdown = z.infer<typeof deviceHourlyBreakdownSchema>;
 
 const identifyResponseSchema = z.object({
   user: userSchema,
@@ -188,6 +190,52 @@ const otaJobSchema = z
   })
   .passthrough();
 
+const devicePeakDaySummarySchema = z.object({
+  serialNumber: z.string(),
+  deviceId: z.string(),
+  displayName: z.string().optional(),
+  tenantId: z.string().optional(),
+  siteId: z.string().optional(),
+  siteTimezone: z.string(),
+  rangeStart: z.string(),
+  rangeEnd: z.string(),
+  peakDate: z.string().optional(),
+  peakDayStart: z.string().optional(),
+  peakDayEnd: z.string().optional(),
+  peakDayEnergyKwh: z.number().optional(),
+  dailyBreakdown: z.array(
+    z.object({ date: z.string(), energyKwh: z.number().optional(), dataStatus: z.string() }),
+  ),
+  dataStatus: z.enum(["ok", "insufficient_data", "counter_reset_detected", "no_valid_days"]),
+  messages: z.array(z.string()),
+});
+
+const deviceHourlyBreakdownSchema = z.object({
+  serialNumber: z.string(),
+  deviceId: z.string(),
+  displayName: z.string().optional(),
+  tenantId: z.string().optional(),
+  siteId: z.string().optional(),
+  siteTimezone: z.string(),
+  date: z.string(),
+  dayStart: z.string(),
+  dayEnd: z.string(),
+  hours: z.array(
+    z.object({
+      hourStart: z.string(),
+      localHour: z.number(),
+      energyKwh: z.number().optional(),
+      avgPower: z.number(),
+      maxPower: z.number(),
+      sampleCount: z.number(),
+      counterReset: z.boolean(),
+    }),
+  ),
+  totalEnergyKwh: z.number().optional(),
+  dataStatus: z.enum(["ok", "no_data", "partial_data"]),
+  messages: z.array(z.string()),
+});
+
 async function request<T>(path: string, init: RequestInit, schema: z.ZodType<T>): Promise<T> {
   const response = await fetch(`${config.BACKEND_BASE_URL}${path}`, init);
   if (!response.ok) {
@@ -333,6 +381,20 @@ export const backendClient = {
         body: JSON.stringify(input),
       },
       otaJobSchema.nullable(),
+    ),
+
+  getDevicePeakDaySummary: (identifier: string) =>
+    request(
+      `/devices/${encodeURIComponent(identifier)}/analytics/peak-day`,
+      { method: "GET" },
+      devicePeakDaySummarySchema,
+    ),
+
+  getDeviceHourlyBreakdown: (identifier: string, date: string) =>
+    request(
+      `/devices/${encodeURIComponent(identifier)}/analytics/hourly?date=${encodeURIComponent(date)}`,
+      { method: "GET" },
+      deviceHourlyBreakdownSchema,
     ),
 
   getPendingNotifications: (limit = 20) =>

@@ -7,6 +7,9 @@ import {
   TimeRange,
   buildRangeSegments,
   getLocalDayBounds,
+  addLocalDays,
+  getTimeZoneParts,
+  zonedDateTimeToUtc,
   resolveEnergyPresetRange,
   resolveCustomDateRange,
 } from "./analytics";
@@ -14,6 +17,8 @@ import { DeviceRepo } from "./device.repo";
 import {
   DeviceAnalyticsSummary,
   DeviceEnergyAnalyticsSummary,
+  DevicePeakDaySummary,
+  DeviceHourlyBreakdown,
   DeviceStateRecord,
   SiteRecord,
   TelemetryHourlyRecord,
@@ -338,5 +343,153 @@ export class AnalyticsRepo {
     }
 
     return null;
+  }
+
+  async getPeakDayLast7Days(identifier: string): Promise<DevicePeakDaySummary | null> {
+    const device = await this.deviceRepo.getDeviceHealth(identifier);
+    if (!device) return null;
+
+    const site = device.siteId ? await this.sites.findOne({ siteId: device.siteId }) : null;
+    const siteTimezone = site?.timezone || DEFAULT_SITE_TIMEZONE;
+    const now = new Date();
+
+    const { dayStart: todayStart, dayEnd: todayEnd } = getLocalDayBounds(now, siteTimezone);
+    const rangeStart = addLocalDays(todayStart, siteTimezone, -6);
+    const rangeEnd = todayEnd;
+
+    const segments = buildRangeSegments(rangeStart, rangeEnd, siteTimezone);
+    const segmentResults = await Promise.all(
+      segments.map((seg) => this.computeEnergyDeltaForSegment(device.serialNumber, seg.start, seg.end)),
+    );
+
+    const messages: string[] = [];
+    const dailyBreakdown: DevicePeakDaySummary["dailyBreakdown"] = [];
+    let peakDate: string | undefined;
+    let peakDayStart: Date | undefined;
+    let peakDayEnd: Date | undefined;
+    let peakDayEnergyKwh: number | undefined;
+    let hasValidDays = false;
+
+    for (const [i, result] of segmentResults.entries()) {
+      const seg = segments[i];
+      const parts = getTimeZoneParts(seg.start, siteTimezone);
+      const dateStr = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+
+      if (result.status === "ok") {
+        hasValidDays = true;
+        const energyKwh = Number(result.delta.toFixed(3));
+        dailyBreakdown.push({ date: dateStr, energyKwh, dataStatus: "ok" });
+        if (peakDayEnergyKwh === undefined || energyKwh > peakDayEnergyKwh) {
+          peakDate = dateStr;
+          peakDayStart = seg.start;
+          peakDayEnd = seg.end;
+          peakDayEnergyKwh = energyKwh;
+        }
+      } else {
+        dailyBreakdown.push({ date: dateStr, dataStatus: result.status });
+        messages.push(result.message);
+      }
+    }
+
+    if (!site?.timezone) {
+      messages.push(`Site timezone is missing, so analytics used the fallback timezone ${DEFAULT_SITE_TIMEZONE}.`);
+    }
+
+    return {
+      serialNumber: device.serialNumber,
+      deviceId: device.deviceId,
+      displayName: device.displayName,
+      tenantId: device.tenantId,
+      siteId: device.siteId,
+      siteTimezone,
+      rangeStart,
+      rangeEnd,
+      peakDate,
+      peakDayStart,
+      peakDayEnd,
+      peakDayEnergyKwh,
+      dailyBreakdown,
+      dataStatus: !hasValidDays ? "no_valid_days" : peakDate ? "ok" : "insufficient_data",
+      messages,
+    };
+  }
+
+  async getHourlyBreakdown(identifier: string, date: string): Promise<DeviceHourlyBreakdown | null> {
+    const device = await this.deviceRepo.getDeviceHealth(identifier);
+    if (!device) return null;
+
+    const site = device.siteId ? await this.sites.findOne({ siteId: device.siteId }) : null;
+    const siteTimezone = site?.timezone || DEFAULT_SITE_TIMEZONE;
+    const now = new Date();
+
+    let dayStart: Date;
+    let dayEnd: Date;
+    let resolvedDate: string;
+
+    if (date === "today") {
+      const bounds = getLocalDayBounds(now, siteTimezone);
+      dayStart = bounds.dayStart;
+      dayEnd = bounds.dayEnd;
+      const parts = getTimeZoneParts(now, siteTimezone);
+      resolvedDate = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+    } else if (date === "yesterday") {
+      const { dayStart: todayStart } = getLocalDayBounds(now, siteTimezone);
+      dayStart = addLocalDays(todayStart, siteTimezone, -1);
+      dayEnd = todayStart;
+      const parts = getTimeZoneParts(dayStart, siteTimezone);
+      resolvedDate = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+    } else {
+      const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!match) throw new Error("date must be YYYY-MM-DD, today, or yesterday");
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      dayStart = zonedDateTimeToUtc({ year, month, day }, siteTimezone);
+      dayEnd = addLocalDays(dayStart, siteTimezone, 1);
+      resolvedDate = date;
+    }
+
+    const hourlyRows = await this.telemetryHourly
+      .find({ serialNumber: device.serialNumber, hourStart: { $gte: dayStart, $lt: dayEnd } })
+      .sort({ hourStart: 1 })
+      .toArray();
+
+    const messages: string[] = [];
+    if (!site?.timezone) {
+      messages.push(`Site timezone is missing, so analytics used the fallback timezone ${DEFAULT_SITE_TIMEZONE}.`);
+    }
+
+    const hours = hourlyRows.map((row) => ({
+      hourStart: row.hourStart,
+      localHour: getTimeZoneParts(row.hourStart, siteTimezone).hour,
+      energyKwh: row.energyKwh,
+      avgPower: row.avgPower,
+      maxPower: row.maxPower,
+      sampleCount: row.sampleCount,
+      counterReset: row.counterReset,
+    }));
+
+    const hasCounterReset = hours.some((h) => h.counterReset);
+    let totalEnergyKwh: number | undefined;
+    if (!hasCounterReset) {
+      const sum = hours.reduce((acc, h) => acc + (h.energyKwh ?? 0), 0);
+      totalEnergyKwh = Number(sum.toFixed(3));
+    }
+
+    return {
+      serialNumber: device.serialNumber,
+      deviceId: device.deviceId,
+      displayName: device.displayName,
+      tenantId: device.tenantId,
+      siteId: device.siteId,
+      siteTimezone,
+      date: resolvedDate,
+      dayStart,
+      dayEnd,
+      hours,
+      totalEnergyKwh,
+      dataStatus: hours.length === 0 ? "no_data" : hasCounterReset ? "partial_data" : "ok",
+      messages,
+    };
   }
 }

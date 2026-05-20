@@ -45,6 +45,8 @@ export type {
   DeviceAnalyticsSummary,
   EnergyAnalyticsPreset,
   DeviceEnergyAnalyticsSummary,
+  DevicePeakDaySummary,
+  DeviceHourlyBreakdown,
   FleetSummary,
   UserSummary,
 } from "./db/types";
@@ -180,6 +182,8 @@ export class MongoService {
   getDeviceEnergyAnalytics(identifier: string, options: EnergyRangeOptions) {
     return this.analyticsRepo.getDeviceEnergyAnalytics(identifier, options);
   }
+  getPeakDayLast7Days(identifier: string) { return this.analyticsRepo.getPeakDayLast7Days(identifier); }
+  getHourlyBreakdown(identifier: string, date: string) { return this.analyticsRepo.getHourlyBreakdown(identifier, date); }
 
   // --- Cross-domain aggregates ---
 

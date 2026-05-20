@@ -1,4 +1,4 @@
-import { backendClient, Membership } from "../backend-client";
+import { backendClient, Membership, DevicePeakDaySummary, DeviceHourlyBreakdown } from "../backend-client";
 import { parseAnalyticsIntent, renderAnalyticsAnswer } from "../groq";
 import { logger } from "../logger";
 import { sendMessage } from "../telegram";
@@ -54,6 +54,29 @@ function formatEnergyAnalyticsFallback(summary: Awaited<ReturnType<typeof backen
   return withAverage && summary.averageDailyKwh !== undefined
     ? `${label}: ${labelRange.toLowerCase()} da dung ${summary.energyKwh.toFixed(3)} kWh, trung binh ${summary.averageDailyKwh.toFixed(3)} kWh/ngay. Mui gio ${summary.siteTimezone}.`
     : `${label}: ${labelRange.toLowerCase()} da dung ${summary.energyKwh.toFixed(3)} kWh. Mui gio ${summary.siteTimezone}.`;
+}
+
+function formatPeakDayFallback(summary: DevicePeakDaySummary): string {
+  const label = summary.displayName ?? summary.serialNumber;
+  if (!summary.peakDate || summary.peakDayEnergyKwh === undefined) {
+    return `${label}: chua du du lieu de xac dinh ngay dung nhieu nhat trong 7 ngay qua. Mui gio ${summary.siteTimezone}.`;
+  }
+  const [y, m, d] = summary.peakDate.split("-");
+  return `${label}: trong 7 ngay qua, ngay dung dien nhieu nhat la ${d}/${m}/${y} voi ${summary.peakDayEnergyKwh.toFixed(3)} kWh. Mui gio ${summary.siteTimezone}.`;
+}
+
+function formatHourlyBreakdownFallback(summary: DeviceHourlyBreakdown): string {
+  const label = summary.displayName ?? summary.serialNumber;
+  if (summary.dataStatus === "no_data" || summary.hours.length === 0) {
+    return `${label}: khong co du lieu theo gio cho ngay ${summary.date}. Mui gio ${summary.siteTimezone}.`;
+  }
+  const lines = summary.hours
+    .filter((h) => !h.counterReset)
+    .map((h) => `${String(h.localHour).padStart(2, "0")}:00: ${h.energyKwh !== undefined ? h.energyKwh.toFixed(3) + " kWh" : "N/A"}, ${h.avgPower.toFixed(1)} W`);
+  const total = summary.totalEnergyKwh !== undefined ? `Tong: ${summary.totalEnergyKwh.toFixed(3)} kWh` : "";
+  return [`${label} - bang dien theo gio ngay ${summary.date} (${summary.siteTimezone}):`, ...lines, total]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function isEnergyRangeIntent(intent: Awaited<ReturnType<typeof parseAnalyticsIntent>>["intent"]) {
@@ -152,6 +175,21 @@ export async function handleAnalyticsQuestion(chatId: number, text: string, user
     const summary = await backendClient.getDeviceEnergyAnalytics(device.serialNumber, energyQuery);
     const answer = await renderAnalyticsAnswer(text, intent.intent, summary);
     await sendMessage(chatId, answer ?? formatEnergyAnalyticsFallback(summary));
+    return true;
+  }
+
+  if (intent.intent === "get_peak_day") {
+    const summary = await backendClient.getDevicePeakDaySummary(device.serialNumber);
+    const answer = await renderAnalyticsAnswer(text, intent.intent, summary);
+    await sendMessage(chatId, answer ?? formatPeakDayFallback(summary));
+    return true;
+  }
+
+  if (intent.intent === "get_hourly_breakdown") {
+    const targetDate = intent.targetDate ?? "today";
+    const summary = await backendClient.getDeviceHourlyBreakdown(device.serialNumber, targetDate);
+    const answer = await renderAnalyticsAnswer(text, intent.intent, summary);
+    await sendMessage(chatId, answer ?? formatHourlyBreakdownFallback(summary));
     return true;
   }
 

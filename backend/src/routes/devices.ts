@@ -117,3 +117,22 @@ devicesRouter.post("/:deviceId/ota", async (req, res) => {
     res.status(message === "Device not found" ? 404 : 400).json({ error: message });
   }
 });
+
+devicesRouter.get("/:deviceId/analytics/peak-day", async (req, res) => {
+  const summary = await mongoService.getPeakDayLast7Days(String(req.params.deviceId));
+  if (!summary) { res.status(404).json({ error: "Device not found" }); return; }
+  res.json(summary);
+});
+
+devicesRouter.get("/:deviceId/analytics/hourly", async (req, res) => {
+  const dateParam = Array.isArray(req.query.date) ? req.query.date[0] : req.query.date;
+  const date = String(dateParam || "today");
+  try {
+    const summary = await mongoService.getHourlyBreakdown(String(req.params.deviceId), date);
+    if (!summary) { res.status(404).json({ error: "Device not found" }); return; }
+    res.json(summary);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to get hourly breakdown";
+    res.status(400).json({ error: message });
+  }
+});
