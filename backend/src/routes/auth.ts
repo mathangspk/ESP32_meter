@@ -15,7 +15,7 @@ authRouter.post("/login", async (req, res) => {
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
-  const token = generateToken({ userId: user.userId, systemRole: user.systemRole ?? "user" });
+  const token = generateToken({ userId: user.userId, systemRole: user.systemRole ?? "user", tenantId: user.defaultTenantId });
   const { passwordHash: _ph, ...safeUser } = user;
   res.json({ token, user: safeUser });
 });

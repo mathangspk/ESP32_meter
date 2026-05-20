@@ -6,6 +6,7 @@ import { config } from "./config";
 export type JwtPayload = {
   userId: string;
   systemRole: "platform_admin" | "user";
+  tenantId?: string;
 };
 
 export async function hashPassword(password: string): Promise<string> {

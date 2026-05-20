@@ -143,7 +143,7 @@ export class MongoService {
   setUserDefaultTenant(userId: string, tenantId: string) { return this.userRepo.setUserDefaultTenant(userId, tenantId); }
   getTenantListForUser(userId: string) { return this.userRepo.getTenantListForUser(userId); }
   getUserSummary() { return this.userRepo.getUserSummary(); }
-  createWebUser(input: { userId: string; username: string; passwordHash: string; displayName: string; systemRole: "platform_admin" | "user" }) {
+  createWebUser(input: Parameters<UserRepo["createWebUser"]>[0]) {
     return this.userRepo.createWebUser(input);
   }
   updateWebUser(userId: string, patch: Parameters<UserRepo["updateWebUser"]>[1]) { return this.userRepo.updateWebUser(userId, patch); }

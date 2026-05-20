@@ -139,6 +139,7 @@ export class UserRepo {
     passwordHash: string;
     displayName: string;
     systemRole: "platform_admin" | "user";
+    defaultTenantId?: string;
   }): Promise<UserRecord> {
     const now = new Date();
     const record: UserRecord = {
@@ -147,6 +148,7 @@ export class UserRepo {
       passwordHash: input.passwordHash,
       systemRole: input.systemRole,
       displayName: input.displayName,
+      ...(input.defaultTenantId ? { defaultTenantId: input.defaultTenantId } : {}),
       status: "active",
       createdAt: now,
       updatedAt: now,

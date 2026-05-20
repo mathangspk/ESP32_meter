@@ -1,16 +1,34 @@
 import { Router } from "express";
-import { authMiddleware, hashPassword, requirePlatformAdmin } from "../auth";
+import { authMiddleware, hashPassword, requirePlatformAdmin, type JwtPayload } from "../auth";
 import { mongoService } from "../mongodb";
 
 export const dashboardRouter = Router();
 
-dashboardRouter.get("/stats", authMiddleware, async (_req, res) => {
-  const stats = await mongoService.getDashboardStats();
-  res.json(stats);
+dashboardRouter.get("/stats", authMiddleware, async (req, res) => {
+  const { systemRole, tenantId } = (req as typeof req & { user: JwtPayload }).user;
+  if (systemRole === "platform_admin") {
+    const stats = await mongoService.getDashboardStats();
+    res.json(stats);
+    return;
+  }
+  if (!tenantId) {
+    res.json({ totalDevices: 0, onlineDevices: 0, totalUsers: 1, totalTenants: 0 });
+    return;
+  }
+  const devices = await mongoService.getDevicesForTenant(tenantId, 200);
+  const onlineDevices = devices.filter(d => d.state?.isOffline === false).length;
+  res.json({ totalDevices: devices.length, onlineDevices, totalUsers: 1, totalTenants: 1 });
 });
 
-dashboardRouter.get("/devices", authMiddleware, async (_req, res) => {
-  const devices = await mongoService.getDevices(200);
+dashboardRouter.get("/devices", authMiddleware, async (req, res) => {
+  const { systemRole, tenantId } = (req as typeof req & { user: JwtPayload }).user;
+  if (systemRole === "platform_admin") {
+    const devices = await mongoService.getDevices(200);
+    res.json(devices);
+    return;
+  }
+  if (!tenantId) { res.json([]); return; }
+  const devices = await mongoService.getDevicesForTenant(tenantId, 200);
   res.json(devices);
 });
 
@@ -26,8 +44,8 @@ dashboardRouter.get("/users", authMiddleware, requirePlatformAdmin, async (_req,
 });
 
 dashboardRouter.post("/users", authMiddleware, requirePlatformAdmin, async (req, res) => {
-  const { username, password, displayName, systemRole } = req.body as {
-    username?: string; password?: string; displayName?: string; systemRole?: string;
+  const { username, password, displayName, systemRole, tenantId } = req.body as {
+    username?: string; password?: string; displayName?: string; systemRole?: string; tenantId?: string;
   };
   if (!username || !password || !displayName) {
     res.status(400).json({ error: "username, password, displayName are required" });
@@ -36,7 +54,7 @@ dashboardRouter.post("/users", authMiddleware, requirePlatformAdmin, async (req,
   const role = systemRole === "platform_admin" ? "platform_admin" : "user";
   const passwordHash = await hashPassword(password);
   const userId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const user = await mongoService.createWebUser({ userId, username, passwordHash, displayName, systemRole: role });
+  const user = await mongoService.createWebUser({ userId, username, passwordHash, displayName, systemRole: role, defaultTenantId: tenantId });
   const { passwordHash: _ph, ...safe } = user;
   res.status(201).json(safe);
 });

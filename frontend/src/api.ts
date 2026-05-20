@@ -41,6 +41,7 @@ export type User = {
   username?: string;
   displayName?: string;
   systemRole?: "platform_admin" | "user";
+  defaultTenantId?: string;
   status: string;
   createdAt: string;
   lastActiveAt?: string;
@@ -89,6 +90,7 @@ export type CreateUserInput = {
   password: string;
   displayName: string;
   systemRole: "platform_admin" | "user";
+  tenantId?: string;
 };
 
 export type DayBreakdown = {
