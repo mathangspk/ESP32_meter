@@ -2,7 +2,59 @@
 
 ## Current Goal
 
-System stable and fully deployed. Codebase refactoring in progress for maintainability.
+System stable and fully deployed. Analytics features expanding.
+
+## Session Delta (2026-05-21)
+
+### What Changed
+
+1. **Telegram role-based access control** (completed, committed `c3e4a5c`)
+   - Replaced flat `canManageDevice()` (any tenant member could do anything) with role-aware gates:
+     - `reboot` → `site_operator` or `tenant_admin` within tenant, or `platform_admin`
+     - `remove` → `tenant_admin` within tenant, or `platform_admin`
+     - `factory_reset` → `platform_admin` only
+     - `/ota_update` → `platform_admin` only
+   - New functions in `assistant-bot/src/device-resolver.ts`: `canPerformDeviceAction(action, identifier, defaultTenantId, memberships)` and `canPerformOta(memberships)`
+   - Updated `handlers/commands.ts` and `handlers/device.ts` to use new functions
+   - Action-specific denial messages in Vietnamese
+   - TypeScript typecheck: 0 errors
+   - Pushed to main — awaiting deploy
+
+2. **New analytics intents: `get_peak_day` and `get_hourly_breakdown`** (completed, committed `e088d6b`)
+   - **`get_peak_day`** — "Ngày nào trong tuần dùng nhiều điện nhất?"
+     - Backend: `GET /devices/:id/analytics/peak-day` in `backend/src/routes/devices.ts`
+     - Repo method `getPeakDayLast7Days()` in `analytics.repo.ts` — runs 7 local-day boundary-based segments in parallel via `Promise.all`, returns peak date + daily breakdown
+     - Bot: intent in `groq.ts`, fallback keyword rule (`ngay nao + tuan + asksEnergy`), handler branch in `handlers/analytics.ts`
+   - **`get_hourly_breakdown`** — "Cho mình bảng điện theo giờ hôm nay"
+     - Backend: `GET /devices/:id/analytics/hourly?date=today|yesterday|YYYY-MM-DD`
+     - Repo method `getHourlyBreakdown()` — queries `telemetry_hourly` collection directly, maps `localHour` from `getTimeZoneParts`
+     - Bot: intent with `targetDate` field in schema, fallback keyword rule (`theo gio/bang gio/hourly`), handler branch + table formatter
+   - 7 files changed: `backend/src/db/types.ts`, `analytics.repo.ts`, `routes/devices.ts`, `mongodb.ts`, `assistant-bot/src/backend-client.ts`, `groq.ts`, `handlers/analytics.ts`
+   - Both backend + assistant-bot typecheck: 0 errors
+   - Pushed to main — awaiting deploy
+
+### Deploy Commands (after CI builds images)
+
+```bash
+# Deploy backend
+ssh vps-prod "cd /home/tma_agi/esp32_loss_power_deploy && \
+  DOCKER_CONFIG=/home/tma_agi/ghcr-docker-config docker-compose -f docker-compose.deploy.yml pull backend && \
+  DOCKER_CONFIG=/home/tma_agi/ghcr-docker-config docker-compose -f docker-compose.deploy.yml up -d backend"
+
+# Deploy assistant-bot
+ssh vps-prod "cd /home/tma_agi/esp32_loss_power_deploy && \
+  DOCKER_CONFIG=/home/tma_agi/ghcr-docker-config docker-compose -f docker-compose.deploy.yml pull assistant-bot && \
+  DOCKER_CONFIG=/home/tma_agi/ghcr-docker-config docker-compose -f docker-compose.deploy.yml up -d assistant-bot"
+```
+
+### To Verify After Deploy
+
+- `ssh vps-prod "curl -sS http://127.0.0.1:3000/devices/7B34E3EC/analytics/peak-day"` — should return JSON with `peakDate` and `dailyBreakdown`
+- `ssh vps-prod "curl -sS http://127.0.0.1:3000/devices/7B34E3EC/analytics/hourly?date=today"` — should return JSON with `hours` array
+- Bot: send "Ngày nào trong tuần dùng nhiều điện nhất?" → expect peak day response
+- Bot: send "Cho mình bảng điện theo giờ hôm nay" → expect hourly table
+
+---
 
 ## Session Delta (2026-05-20)
 
@@ -212,11 +264,10 @@ Stable operation. All planned optimizations deployed.
 
 ## Next Recommended Steps
 
-1. **Telegram role scoping**: Restrict OTA/admin commands by `systemRole`; scope device commands by tenant membership.
-2. **Self-service claim flow**: User enters serial number in Telegram → claims device to their account.
-3. **Optional**: `/peak_day` intent + backend endpoint for `"Ngày dùng nhiều điện nhất trong tuần"`.
-4. **Optional**: Hourly breakdown endpoint for `"bảng theo giờ"` questions.
-5. **Monitor**: Watch alert behavior on next device restart — confirm no spam with 2-min delay.
+1. **Deploy this session's commits** — CI builds pending for `c3e4a5c` (role scoping) and `e088d6b` (analytics); pull + restart both backend and assistant-bot on VPS once CI passes.
+2. **Verify new analytics endpoints** after deploy — curl `peak-day` and `hourly` for device `7B34E3EC`.
+3. **Optional**: `/peak_day` for specific date range (currently hardcoded to last 7 local days).
+4. **Optional**: Frontend dashboard analytics panel — surface `peak-day` and `hourly` data visually.
 
 ## Known Constraints
 
@@ -255,9 +306,14 @@ git tag fw-v1.0.2 && git push origin fw-v1.0.2
 ssh vps-prod "curl -sS http://127.0.0.1:3000/devices/7B34E3EC/firmware-policy"
 ```
 
-## Last Verified Result (2026-05-20)
+## Last Verified Result (2026-05-21)
 
+- TypeScript typecheck: 0 errors on both backend and assistant-bot after all 2026-05-21 changes
+- Commits `c3e4a5c` and `e088d6b` pushed to main; CI build in progress
+- VPS not yet updated with this session's changes — deploy pending CI
+
+### Carried Forward (last confirmed on VPS)
 - All 5 containers Up (mosquitto, mongodb, backend, assistant-bot, frontend), 0 restarts
-- assistant-bot responding correctly in Vietnamese (encoding bug fixed)
-- TypeScript typecheck: 0 errors on full assistant-bot codebase
 - Backend healthz: `{"status":"ok","mqttConnected":true,"mongodbConnected":true}`
+- Vietnamese text in bot responses renders correctly
+- Device `7B34E3EC` (nhaba): online, firmware `1.0.1`, sending telemetry
