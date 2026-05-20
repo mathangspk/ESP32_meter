@@ -32,6 +32,8 @@ export const api = {
     req<void>("PUT", `/dashboard/users/${userId}`, data),
   deleteUser: (userId: string) => req<void>("DELETE", `/dashboard/users/${userId}`),
   tenants: () => req<Tenant[]>("GET", "/dashboard/tenants"),
+  peakDay: (serial: string) => req<PeakDaySummary>("GET", `/devices/${serial}/analytics/peak-day`),
+  hourly: (serial: string, date = "today") => req<HourlyBreakdown>("GET", `/devices/${serial}/analytics/hourly?date=${date}`),
 };
 
 export type User = {
@@ -87,4 +89,44 @@ export type CreateUserInput = {
   password: string;
   displayName: string;
   systemRole: "platform_admin" | "user";
+};
+
+export type DayBreakdown = {
+  date: string;
+  energyKwh?: number;
+  dataStatus: string;
+};
+
+export type PeakDaySummary = {
+  serialNumber: string;
+  deviceId: string;
+  displayName?: string;
+  siteTimezone: string;
+  peakDate?: string;
+  peakDayEnergyKwh?: number;
+  dailyBreakdown: DayBreakdown[];
+  dataStatus: "ok" | "insufficient_data" | "counter_reset_detected" | "no_valid_days";
+  messages: string[];
+};
+
+export type HourlySlot = {
+  hourStart: string;
+  localHour: number;
+  energyKwh?: number;
+  avgPower: number;
+  maxPower: number;
+  sampleCount: number;
+  counterReset: boolean;
+};
+
+export type HourlyBreakdown = {
+  serialNumber: string;
+  deviceId: string;
+  displayName?: string;
+  siteTimezone: string;
+  date: string;
+  hours: HourlySlot[];
+  totalEnergyKwh?: number;
+  dataStatus: "ok" | "no_data" | "partial_data";
+  messages: string[];
 };
