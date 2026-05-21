@@ -2,7 +2,58 @@
 
 ## Current Goal
 
-System stable and fully deployed. Analytics features expanding.
+System stable and fully deployed. Web dashboard maturing toward end-user access.
+
+## Session Delta (2026-05-21 — part 2)
+
+### What Changed
+
+1. **Analytics charts in device detail modal** (completed, committed `e5ae27f`)
+   - `frontend/src/pages/Devices.tsx` — `DeviceDetail` modal now has Info / Analytics tabs
+   - Analytics tab: 7-day energy bar chart (`/devices/:serial/analytics/peak-day`) + today's hourly power line chart (`/devices/:serial/analytics/hourly?date=today`)
+   - Charts rendered with Recharts (`recharts: ^2.14.1` added to `frontend/package.json`)
+   - Data fetched lazily on first tab click; re-use cached on subsequent tab switches
+   - New types in `frontend/src/api.ts`: `DayBreakdown`, `PeakDaySummary`, `HourlySlot`, `HourlyBreakdown`
+   - Frontend build: 0 errors
+   - **Deployed to VPS** — frontend container recreated, HTTP 200 confirmed
+   - API endpoints verified: `peak-day` returns `peakDate: "2026-05-14"`, `peakDayEnergyKwh: 13.068`; `hourly` returns hourly buckets with `avgPower` and `energyKwh`
+
+2. **Tenant-scoped dashboard for regular users** (completed, committed `8542c8a`)
+   - Problem: all web users (admin and non-admin) saw the full fleet — no tenant filtering
+   - `backend/src/auth.ts` — added `tenantId?: string` to `JwtPayload`
+   - `backend/src/routes/auth.ts` — login now includes `user.defaultTenantId` as `tenantId` in JWT
+   - `backend/src/routes/dashboard.ts` — `GET /stats` and `GET /devices` now branch on `systemRole`:
+     - `platform_admin` → full fleet view (unchanged)
+     - regular `user` with `tenantId` → `getDevicesForTenant(tenantId)` and tenant-scoped stats
+     - regular `user` without `tenantId` → empty response
+   - `backend/src/db/user.repo.ts` — `createWebUser()` now accepts `defaultTenantId?: string`
+   - `backend/src/mongodb.ts` — delegate updated to pass through `defaultTenantId`
+   - `frontend/src/pages/Users.tsx` — Create User modal now shows tenant dropdown when role is "user"; clears tenantId when switching to admin role
+   - `frontend/src/api.ts` — `User` type now has `defaultTenantId?: string`; `CreateUserInput` has `tenantId?: string`
+   - Both backend + frontend typecheck/build: 0 errors
+   - **Pushed to main — CI build pending; not yet deployed**
+
+### Deploy Commands (after CI builds `8542c8a`)
+
+```bash
+# Deploy backend + frontend together
+ssh vps-prod "cd /home/tma_agi/esp32_loss_power_deploy && \
+  DOCKER_CONFIG=/home/tma_agi/ghcr-docker-config docker-compose -f docker-compose.deploy.yml pull backend frontend && \
+  DOCKER_CONFIG=/home/tma_agi/ghcr-docker-config docker-compose -f docker-compose.deploy.yml up -d backend frontend"
+```
+
+### To Verify After Deploy
+
+1. Login as admin → Users → **+ New User** → Role: User → pick tenant "tenant-default" → Create
+2. Login as new user → should see only nhaba device (not all fleet)
+3. Click nhaba → Analytics tab → 7-day bar chart + hourly line chart visible
+4. Admin login → fleet-wide view unchanged
+
+### Known Minor Issue
+
+`localHour: 24` returned for the midnight bucket (00:00 Vietnam time) — renders as `24:00` in the hourly chart instead of `0:00`. Cosmetic only, data is correct. Fix: normalize `localHour === 24` to `0` in the frontend map.
+
+---
 
 ## Session Delta (2026-05-21)
 
