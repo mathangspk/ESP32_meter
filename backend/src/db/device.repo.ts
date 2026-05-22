@@ -286,4 +286,39 @@ export class DeviceRepo {
       .toArray();
     return results[0]?.count ?? 0;
   }
+
+  async updateDeviceDisplayName(
+    identifier: string,
+    displayName: string,
+    actorUserId: string,
+  ): Promise<DeviceRecord | null> {
+    const now = new Date();
+    const existingDevice = await this.devices.findOne({
+      $or: [{ serialNumber: identifier }, { deviceId: identifier }],
+    });
+    if (!existingDevice) throw new Error("Device not found");
+    if (existingDevice.claimStatus !== "claimed") {
+      throw new Error("Only claimed devices can be renamed");
+    }
+
+    await this.devices.updateOne(
+      { serialNumber: existingDevice.serialNumber },
+      { $set: { displayName, updatedAt: now } }
+    );
+
+    await this.auditEvents.insertOne({
+      eventType: "device.renamed",
+      actorUserId,
+      tenantId: existingDevice.tenantId,
+      deviceSerialNumber: existingDevice.serialNumber,
+      deviceId: existingDevice.deviceId,
+      payload: {
+        oldDisplayName: existingDevice.displayName,
+        newDisplayName: displayName,
+      },
+      createdAt: now,
+    });
+
+    return this.devices.findOne({ serialNumber: existingDevice.serialNumber });
+  }
 }

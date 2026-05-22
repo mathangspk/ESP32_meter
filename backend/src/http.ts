@@ -6,6 +6,7 @@ import { devicesRouter } from "./routes/devices";
 import { otaRouter } from "./routes/ota";
 import { adminRouter } from "./routes/admin";
 import { internalRouter } from "./routes/internal";
+import { authMiddleware, requirePlatformAdmin } from "./auth";
 
 export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
   const app = express();
@@ -18,10 +19,10 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
 
   app.use("/auth", authRouter);
   app.use("/dashboard", dashboardRouter);
-  app.use("/devices", devicesRouter);
-  app.use("/ota", otaRouter);
-  app.use("/admin", adminRouter);
-  app.use("/internal", internalRouter);
+  app.use("/devices", authMiddleware, devicesRouter);
+  app.use("/ota", authMiddleware, requirePlatformAdmin, otaRouter);
+  app.use("/admin", authMiddleware, requirePlatformAdmin, adminRouter);
+  app.use("/internal", authMiddleware, requirePlatformAdmin, internalRouter);
 
   return app;
 }

@@ -10,6 +10,7 @@ const envSchema = z.object({
   GROQ_API_KEY: z.string().optional().default(""),
   GROQ_MODEL: z.string().default("llama-3.1-8b-instant"),
   GROQ_BASE_URL: z.string().url().default("https://api.groq.com/openai/v1"),
+  JWT_SECRET: z.string().min(16).default("change-me-in-production-min-16-chars"),
 });
 
 export const config = envSchema.parse(process.env);

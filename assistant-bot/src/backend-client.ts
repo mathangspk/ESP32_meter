@@ -237,7 +237,12 @@ const deviceHourlyBreakdownSchema = z.object({
 });
 
 async function request<T>(path: string, init: RequestInit, schema: z.ZodType<T>): Promise<T> {
-  const response = await fetch(`${config.BACKEND_BASE_URL}${path}`, init);
+  const headers = new Headers(init.headers || {});
+  headers.set("X-Internal-Key", config.JWT_SECRET);
+  const response = await fetch(`${config.BACKEND_BASE_URL}${path}`, {
+    ...init,
+    headers,
+  });
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`Backend request failed: ${response.status} ${body}`);
@@ -403,6 +408,7 @@ export const backendClient = {
   getBotSession: async (chatId: number) => {
     const response = await fetch(`${config.BACKEND_BASE_URL}/internal/bot-sessions/${encodeURIComponent(String(chatId))}`, {
       method: "GET",
+      headers: { "X-Internal-Key": config.JWT_SECRET },
     });
     if (response.status === 404) {
       return null;
@@ -428,6 +434,7 @@ export const backendClient = {
   deleteBotSession: async (chatId: number) => {
     const response = await fetch(`${config.BACKEND_BASE_URL}/internal/bot-sessions/${encodeURIComponent(String(chatId))}`, {
       method: "DELETE",
+      headers: { "X-Internal-Key": config.JWT_SECRET },
     });
     if (!response.ok && response.status !== 404) {
       throw new Error(`Failed to delete bot session: ${response.status}`);
@@ -437,6 +444,7 @@ export const backendClient = {
   markNotificationProcessing: async (notificationId: string) => {
     const response = await fetch(`${config.BACKEND_BASE_URL}/internal/notifications/${notificationId}/processing`, {
       method: "POST",
+      headers: { "X-Internal-Key": config.JWT_SECRET },
     });
     if (!response.ok) {
       throw new Error(`Failed to mark notification processing: ${response.status}`);
@@ -446,6 +454,7 @@ export const backendClient = {
   markNotificationSent: async (notificationId: string) => {
     const response = await fetch(`${config.BACKEND_BASE_URL}/internal/notifications/${notificationId}/sent`, {
       method: "POST",
+      headers: { "X-Internal-Key": config.JWT_SECRET },
     });
     if (!response.ok) {
       throw new Error(`Failed to mark notification sent: ${response.status}`);
@@ -455,7 +464,10 @@ export const backendClient = {
   markNotificationFailed: async (notificationId: string, error: string) => {
     const response = await fetch(`${config.BACKEND_BASE_URL}/internal/notifications/${notificationId}/failed`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": config.JWT_SECRET,
+      },
       body: JSON.stringify({ error }),
     });
     if (!response.ok) {

@@ -113,6 +113,9 @@ export class MongoService {
   unclaimDevice(input: { identifier: string; actorUserId: string; reason?: string }) {
     return this.deviceRepo.unclaimDevice(input);
   }
+  updateDeviceDisplayName(identifier: string, displayName: string, actorUserId: string) {
+    return this.deviceRepo.updateDeviceDisplayName(identifier, displayName, actorUserId);
+  }
   createDeviceCommand(input: { commandId: string; action: import("./types").DeviceAction; identifier: string; commandTopic: string; actorUserId: string; reason?: string }) {
     return this.deviceRepo.createDeviceCommand(input);
   }

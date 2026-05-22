@@ -196,7 +196,19 @@ export default function Dashboard({ user }: { user?: User }) {
         </table>
       </div>
 
-      {selected && <DeviceDetail device={selected} user={user} onClose={() => setSelected(null)} />}
+      {selected && (
+        <DeviceDetail
+          device={selected}
+          user={user}
+          onClose={() => setSelected(null)}
+          onDeviceUpdated={(updated) => {
+            setSelected((prev) => (prev ? { ...prev, displayName: updated.displayName } : null));
+            setDevices((prev) =>
+              prev.map((d) => (d.deviceId === updated.deviceId ? { ...d, displayName: updated.displayName } : d))
+            );
+          }}
+        />
+      )}
     </>
   );
 }

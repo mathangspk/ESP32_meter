@@ -36,6 +36,7 @@ export const api = {
   hourly: (serial: string, date = "today") => req<HourlyBreakdown>("GET", `/devices/${serial}/analytics/hourly?date=${date}`),
   deviceAction: (deviceId: string, action: string) => req<{ success: boolean; message?: string }>("POST", `/devices/${deviceId}/actions`, { action }),
   deviceOta: (deviceId: string, version: string) => req<{ jobId: string; status: string }>("POST", `/devices/${deviceId}/ota`, { version }),
+  renameDevice: (deviceId: string, displayName: string) => req<Device>("PUT", `/devices/${deviceId}`, { displayName }),
   releases: () => req<any[]>("GET", "/admin/firmware/releases"),
 };
 
