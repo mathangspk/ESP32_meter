@@ -23,9 +23,10 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200
 5. Upload with `pio run -t upload --upload-port /dev/cu.SLAB_USBtoUART` if hardware is connected.
 6. Verify runtime behavior from serial output.
 
-## OpenCode Workflow
+## Workflow
 
-Repository workflow is tracked in `AGENTS.md`.
+Team workflow is defined at `../../opencode_profile/.opencode/agents/orchestrator.md`.
+Project-specific context (hardware, commands, facts) is in `AGENTS.md`.
 
 Portable project state is tracked in:
 

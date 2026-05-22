@@ -5,8 +5,13 @@ namespace
 String getIdentitySuffix()
 {
     char suffix[9];
+#if defined(ESP8266)
+    uint32_t chipId = ESP.getChipId();
+    snprintf(suffix, sizeof(suffix), "%08X", chipId);
+#elif defined(ESP32)
     uint64_t efuseMac = ESP.getEfuseMac();
     snprintf(suffix, sizeof(suffix), "%08llX", static_cast<unsigned long long>(efuseMac & 0xFFFFFFFFULL));
+#endif
     return String(suffix);
 }
 }
@@ -18,13 +23,31 @@ ConfigManager::ConfigManager()
 
 bool ConfigManager::initFS()
 {
+#if defined(ESP8266)
+    if (!LittleFS.begin())
+    {
+        Serial.println("Failed to mount LittleFS. Trying to format...");
+        if (LittleFS.format())
+        {
+            Serial.println("LittleFS formatted successfully.");
+            if (LittleFS.begin())
+            {
+                return true;
+            }
+        }
+        Serial.println("Failed to format and mount LittleFS");
+        return false;
+    }
+#elif defined(ESP32)
     if (!LittleFS.begin(true))
     { // true để format nếu mount fail
         Serial.println("Failed to mount LittleFS");
         return false;
     }
+#endif
     return true;
 }
+
 
 void ConfigManager::setDefaults()
 {
@@ -35,8 +58,8 @@ void ConfigManager::setDefaults()
     config.reading_interval = 10000;
     config.wifi_ssid = "";
     config.wifi_password = "";
-    config.mqtt_username = "mqtt";
-    config.mqtt_password = "-------------";
+    config.mqtt_username = "meterMQTT";
+    config.mqtt_password = "meterMQTT";
 }
 
 String ConfigManager::buildDefaultDeviceId() const
@@ -51,7 +74,8 @@ String ConfigManager::buildDefaultSerialNumber() const
 
 bool ConfigManager::shouldMigrateLegacyIdentity() const
 {
-    return config.device_id == "1" && config.serial_number == "SN001";
+    return config.device_id == "1" || config.device_id == "2" || config.device_id == "3" ||
+           config.serial_number == "SN001" || config.serial_number == "SN002" || config.serial_number == "SN003";
 }
 
 void ConfigManager::ensureIdentity()
@@ -119,12 +143,20 @@ bool ConfigManager::loadConfig()
     config.mqtt_username = doc["mqtt_username"] | config.mqtt_username;
     config.mqtt_password = doc["mqtt_password"] | config.mqtt_password;
 
-    const bool shouldRewriteIdentity = shouldMigrateLegacyIdentity() || config.device_id.isEmpty() || config.serial_number.isEmpty();
+    const bool shouldMigrateCredentials = (config.mqtt_username == "mqtt" && (config.mqtt_password == "@51209267192Cvv" || config.mqtt_password == "-------------"));
+    if (shouldMigrateCredentials)
+    {
+        Serial.println("Migrating legacy MQTT credentials to production credentials");
+        config.mqtt_username = "meterMQTT";
+        config.mqtt_password = "meterMQTT";
+    }
+
+    const bool shouldRewriteIdentity = shouldMigrateLegacyIdentity() || config.device_id.isEmpty() || config.serial_number.isEmpty() || shouldMigrateCredentials;
     ensureIdentity();
 
     if (shouldRewriteIdentity)
     {
-        Serial.println("Persisting generated device identity to config");
+        Serial.println("Persisting generated device identity and updated credentials to config");
         saveConfig();
     }
 

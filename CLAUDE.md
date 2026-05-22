@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Team Agent Configuration
+@/mnt/c/local/claude_manager/team-agent/workflow.md
+
 ## Read First
 
 Before starting any session, read:
@@ -10,11 +13,12 @@ Before starting any session, read:
 
 ## Repository Structure
 
-This monorepo has three distinct components:
+This monorepo has four distinct components:
 
 - **`src/` + `include/`** — ESP32 Arduino firmware (PlatformIO)
 - **`backend/`** — Node.js/TypeScript HTTP + MQTT ingestion server
 - **`assistant-bot/`** — Node.js/TypeScript Telegram bot with NLU
+- **`frontend/`** — React/TypeScript dashboard SPA (Vite, served by Nginx on port 8080)
 
 ## Firmware (ESP32 / PlatformIO)
 
@@ -27,6 +31,8 @@ pio device monitor -p /dev/cu.SLAB_USBtoUART -b 115200         # serial monitor
 ```
 
 Upload and serial access require a macOS machine with `/dev/cu.SLAB_USBtoUART`. Neither is available on Windows.
+
+Firmware releases are triggered by pushing a `fw-v*` tag. GitHub Actions builds the release artifact automatically (`firmware-release.yml`).
 
 ### Firmware Architecture
 
@@ -42,8 +48,10 @@ Upload and serial access require a macOS machine with `/dev/cu.SLAB_USBtoUART`. 
 ```bash
 cd backend
 npm install
-npm run build
-npm start
+npm run dev          # run with tsx (hot reload, no build step)
+npm run typecheck    # type-check without emitting
+npm run build        # compile to dist/
+npm start            # run compiled dist/index.js
 ```
 
 Runs on port 3000. Entry point: `backend/src/index.ts`.
@@ -52,20 +60,43 @@ Runs on port 3000. Entry point: `backend/src/index.ts`.
 
 Three long-lived services started at boot:
 - `mqttService` — subscribes to `meter/+/telemetry` and `meter/+/ota/status`; parses with Zod, writes to MongoDB
-- `mongoService` — wraps all MongoDB access; stores telemetry, device state, OTA jobs, analytics snapshots, notifications, users, tenants, sites
-- HTTP server (`createHttpApp`) — Express REST API
+- `mongoService` — thin orchestrator in `mongodb.ts` (~170 lines of delegates) backed by domain repositories in `backend/src/db/`
+- HTTP server (`createHttpApp` in `http.ts`) — thin orchestrator that mounts route modules from `backend/src/routes/`
 
-The HTTP API exposes: `/healthz`, `/devices/*`, `/ota/jobs/*`, `/firmware/releases/*`, `/analytics/*`, `/alerts`, `/users/*`, `/tenants/*`, `/sites/*`, `/bot-sessions/*`, `/notifications/*`.
+**Database layer (`backend/src/db/`):**
+- `device.repo.ts` — `DeviceRepo`: device CRUD, claim/unclaim, commands
+- `telemetry.repo.ts` — `TelemetryRepo`: ingest, device state, rollup, offline tracking
+- `ota.repo.ts` — `OtaRepo`: OTA jobs, firmware releases, policy evaluation
+- `user.repo.ts` — `UserRepo`: web users, Telegram identity, memberships
+- `tenant.repo.ts` — `TenantRepo`: tenants, sites
+- `alert.repo.ts` — `AlertRepo`: alert events, notification queue
+- `bot.repo.ts` — `BotRepo`: bot sessions
+- `analytics.repo.ts` — `AnalyticsRepo`: daily summary, energy analytics
+- `analytics.ts` — pure timezone/energy math (no DB access)
+- `types.ts` — all exported record types
 
-On each MQTT telemetry message, `handleTelemetryAlertTransitions` compares the new reading to stored thresholds and queues Telegram notifications for offline/online transitions.
+**Route modules (`backend/src/routes/`):**
+- `auth.ts` — `/auth/login`, `/auth/me`
+- `dashboard.ts` — `/dashboard/*` (JWT-protected)
+- `devices.ts` — `/devices/*`
+- `ota.ts` — `/ota/jobs/*`
+- `admin.ts` — `/admin/*`
+- `internal.ts` — `/internal/*` (bot-to-backend calls)
+- `utils.ts` — shared `parseLimit()` helper
+
+**Offline alerting (`alerts.ts`):** Two-phase logic — device silent >45s stamps `offlineSince`; a timer fires alerts only after `offlineSince` > 2 minutes, preventing notification spam during restarts.
 
 Energy analytics use boundary-based counter snapshots: `last_7_days` and `last_week` return `insufficient_data` if boundary snapshots are missing by >5 minutes.
+
+On startup, `index.ts` runs `runRollupCatchup` (backfills any missing hourly buckets up to 95 days back) and schedules `runDailyRollup` at 2am UTC.
 
 ## Assistant Bot (Node.js/TypeScript)
 
 ```bash
 cd assistant-bot
 npm install
+npm run dev          # run with tsx
+npm run typecheck
 npm run build
 npm start
 ```
@@ -93,6 +124,26 @@ Natural language pipeline (first match wins):
 
 Vietnamese text normalization (`normalizeVietnameseText`) strips diacritics and lowercases before all regex matching. Device names like "nhaba" are matched against `displayName` with partial-match fallback.
 
+## Frontend (React / Vite)
+
+```bash
+cd frontend
+npm install
+npm run dev      # Vite dev server
+npm run build    # type-check + Vite production build
+```
+
+React 18 SPA with React Router v6. JWT stored in memory; login via `POST /auth/login`. Served in production by Nginx on port 8080 via the `frontend` Docker container.
+
+## CI/CD (GitHub Actions)
+
+Six workflows under `.github/workflows/`:
+- `backend-ci.yml` — typecheck + build on every `backend/**` push/PR
+- `backend-image.yml` — builds and pushes `ghcr.io/mathangspk/esp32-loss-power-backend:latest` on merge to main
+- `assistant-bot-ci.yml` / `assistant-bot-image.yml` — same pattern for bot
+- `frontend-image.yml` — builds and pushes frontend image
+- `firmware-release.yml` — triggered by `fw-v*` tag push; creates GitHub Release with firmware binary
+
 ## Deployment
 
 All build and deploy runs on VPS via SSH. Local Windows environment has no `npm`, `docker`, or `node`.
@@ -100,19 +151,24 @@ All build and deploy runs on VPS via SSH. Local Windows environment has no `npm`
 ```bash
 ssh vps-prod                           # Tailscale required; key at ~/.ssh/opencode_vps
 
-# Check status
-ssh vps-prod "cd /home/tma_agi/esp32_loss_power_deploy && DOCKER_CONFIG=/home/tma_agi/empty-docker-config docker-compose -f docker-compose.deploy.yml ps"
+# Check all 5 containers (mosquitto, mongodb, backend, assistant-bot, frontend)
+ssh vps-prod "cd /home/tma_agi/esp32_loss_power_deploy && DOCKER_CONFIG=/home/tma_agi/ghcr-docker-config docker-compose -f docker-compose.deploy.yml ps"
 
-# Rebuild and restart a service (e.g., assistant-bot)
-ssh vps-prod "cd /home/tma_agi/esp32_loss_power_deploy && DOCKER_CONFIG=/home/tma_agi/empty-docker-config docker-compose -f docker-compose.deploy.yml up -d --build assistant-bot"
+# Deploy a service after git push (CI builds image first)
+ssh vps-prod "cd /home/tma_agi/esp32_loss_power_deploy && \
+  DOCKER_CONFIG=/home/tma_agi/ghcr-docker-config docker-compose -f docker-compose.deploy.yml pull backend && \
+  DOCKER_CONFIG=/home/tma_agi/ghcr-docker-config docker-compose -f docker-compose.deploy.yml up -d backend"
 
 # Check backend health
 ssh vps-prod "curl -sS http://127.0.0.1:3000/healthz"
+
+# Tail logs
+ssh vps-prod "docker logs esp32losspowerdeploy_backend_1 --tail 30"
 ```
 
-VPS stack (`docker-compose.vps.yml`): mosquitto (1883), mongodb, backend (127.0.0.1:3000), assistant-bot. Production env from `.env.prod`.
+VPS deploy directory: `/home/tma_agi/esp32_loss_power_deploy` using `docker-compose.deploy.yml`. GHCR auth config: `/home/tma_agi/ghcr-docker-config/config.json`. Production env from `.env.prod`.
 
-Deploy directory on VPS: `/home/tma_agi/esp32_loss_power_deploy` using `docker-compose.deploy.yml`.
+If GHCR pulls fail, the PAT has likely expired — regenerate and update `/home/tma_agi/ghcr-docker-config/config.json`.
 
 ## Handoff Rule
 

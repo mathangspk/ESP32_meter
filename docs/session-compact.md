@@ -45,12 +45,11 @@
 - OTA is now verified, so future stability runs should avoid serial reads unless actively debugging.
 - The firmware still stores OTA `sha256` metadata, but checksum enforcement is not implemented yet.
 
-## BMAD Summary
+## Workflow
 
-- Workflow-only BMAD is now active in this repo.
-- Routing policy lives in `AGENTS.md`.
-- BMAD guidance lives in `docs/bmad-opencode.md`.
-- Session metrics live in `docs/bmad-scorecard.md`.
+Team workflow defined at `../../opencode_profile/.opencode/agents/orchestrator.md`.
+Historical BMAD reference in `docs/bmad-opencode.md`.
+Session metrics in `docs/bmad-scorecard.md`.
 
 ## Source Of Truth
 

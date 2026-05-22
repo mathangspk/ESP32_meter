@@ -1,5 +1,7 @@
 # Review Gate Workflow
 
+> **Superseded**: Team workflow defined at `../../opencode_profile/.opencode/agents/orchestrator.md` is authoritative. Kept as technical reference.
+
 Use for non-trivial work, dirty worktrees, or multi-session tasks.
 
 ## Order

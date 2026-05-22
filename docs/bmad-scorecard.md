@@ -1,5 +1,7 @@
 # BMAD Scorecard
 
+> **Historical reference only.** Workflow is now team-wide at `../../opencode_profile/.opencode/agents/orchestrator.md`.
+
 Use this file to measure whether BMAD is improving cost discipline and execution quality on real work.
 
 ## How To Use
@@ -10,7 +12,7 @@ After a non-trivial session, append one block using the template below.
 
 - `cheap_steps`: count of steps done with `gpt mini` or `Minimax M2.5 free`
 - `build_steps`: count of steps done with `gpt-5.3 codex`
-- `deep_steps`: count of steps done with `gpt-5.4` or `gpt-5.5`
+- `deep_steps`: count of steps done with `opencode/big-pickle`
 - `escalations`: number of times work moved to a stronger lane
 - `files_changed`: number of files changed in the session
 - `verify_commands`: commands run to verify the result
@@ -21,7 +23,7 @@ After a non-trivial session, append one block using the template below.
 ## Targets
 
 - `cheap_steps >= deep_steps`
-- `gpt-5.4` is used only for architecture, hard debugging, or review
+- `opencode/big-pickle` is used for all work
 - `verify_passed = yes`
 - `handoff_updated = yes`
 - `rework_loops` trends down over time on similar task types

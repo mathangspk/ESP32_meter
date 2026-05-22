@@ -4,6 +4,42 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## ESP8266 OTA Verification Milestone (2026-05-22 — Part 3)
+
+### What Was Confirmed & Verified
+- Quá trình nâng cấp firmware từ xa qua mạng (OTA) trên thiết bị ESP8266 thực tế thành công rực rỡ và hoạt động ổn định.
+- Firmware version `1.0.1` biên dịch thành công cho board ESP8266 (`nodemcuv2`).
+- Kích hoạt OTA thành công thông qua API của backend `POST /ota/jobs` với payload JSON:
+  `{"job_id":"ef89fc31-636a-4501-ad68-0ed04a6487a1","device_id":"004A936C","serial_number":"004A936C","version":"1.0.1","url":"http://113.161.220.166:8080/esp8266-meter-1.0.1.bin"}`
+- Thiết bị ESP8266 nhận lệnh qua MQTT channel `firmwareUpdateOTA/device/004A936C`, tự động gửi telemetry OTA thành `received` -> `downloading`, tải xuống firmware `.bin` từ Nginx static server trên port `8080` của VPS và tự động flash thành công.
+- Thiết bị tự động khởi động lại, khôi phục cấu hình WiFi và MQTT thành công, tự động gửi dữ liệu telemetry mới nhất lên MQTT Broker với thông tin phiên bản mới: `"firmware_version":"1.0.1"`.
+
+### What Changed
+- **`platformio.ini`**: Khôi phục lại cấu hình `-D FIRMWARE_VERSION` trong `platformio.ini` về trạng thái mặc định của codebase (sẽ tự động lấy `"1.0.0"` từ `DataSender.cpp` khi build local) nhằm đảm bảo sự gọn gàng và độc lập trong các bản build tiếp theo.
+- **Tập tin tạm thời**: Dọn dẹp task serial monitor `task-522` (COM3) sau khi quá trình log OTA hoàn thành.
+
+### Remaining Issues
+- Không có. Tính năng OTA cho ESP8266 đã chạy cực kỳ mượt mà và tương thích tốt với luồng server giống như ESP32.
+
+### Exact Next Step
+- Người dùng có thể tiếp tục giám sát dữ liệu telemetry đẩy về Dashboard và VPS từ thiết bị ESP8266 phiên bản `1.0.1` vừa được nâng cấp qua OTA.
+
+### Relevant Log Evidence
+- Serial monitor log khi OTA thành công:
+```
+Message arrived [firmwareUpdateOTA/device/004A936C] {"job_id":"ef89fc31-636a-4501-ad68-0ed04a6487a1",...}
+Received OTA update command
+Starting OTA update from URL: http://113.161.220.166:8080/esp8266-meter-1.0.1.bin
+Cập nhật thành công! Đang khởi động lại...
+...
+Config loaded successfully
+✅ WiFi connected successfully!
+Attempting MQTT connection...connected
+Data sent to MQTT: {"serial_number":"004A936C","device_id":"004A936C",...,"firmware_version":"1.0.1",...}
+```
+
+---
+
 ## Web Dashboard Milestone (2026-05-22 — Part 2)
 
 ### What Was Confirmed & Verified

@@ -68,9 +68,10 @@ Current UART wiring in code:
 PZEM OK | V: 234.4 V | I: 0.000 A | P: 0.0 W | E: 3300.728 kWh
 ```
 
-## Repository Workflow
+## Workflow
 
-- Repository-level workflow instructions live in `AGENTS.md`
+- Team workflow defined at `../../opencode_profile/.opencode/agents/orchestrator.md`
+- Project context (hardware, commands, facts) in `AGENTS.md`
 - Current debugging state and next step live in `docs/handoff.md`
 - Repeatable setup and debug steps live in `docs/setup.md` and `docs/debug-runbook.md`
 
