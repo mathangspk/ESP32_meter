@@ -34,6 +34,9 @@ export const api = {
   tenants: () => req<Tenant[]>("GET", "/dashboard/tenants"),
   peakDay: (serial: string) => req<PeakDaySummary>("GET", `/devices/${serial}/analytics/peak-day`),
   hourly: (serial: string, date = "today") => req<HourlyBreakdown>("GET", `/devices/${serial}/analytics/hourly?date=${date}`),
+  deviceAction: (deviceId: string, action: string) => req<{ success: boolean; message?: string }>("POST", `/devices/${deviceId}/actions`, { action }),
+  deviceOta: (deviceId: string, version: string) => req<{ jobId: string; status: string }>("POST", `/devices/${deviceId}/ota`, { version }),
+  releases: () => req<any[]>("GET", "/admin/firmware/releases"),
 };
 
 export type User = {

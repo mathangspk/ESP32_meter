@@ -49,8 +49,8 @@ function AuthedApp({ user, onLogout }: { user: User; onLogout: () => void }) {
       <Sidebar user={user} onLogout={onLogout} />
       <main className="main-content">
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/devices" element={<Devices />} />
+          <Route path="/" element={<Dashboard user={user} />} />
+          <Route path="/devices" element={<Devices user={user} />} />
           {user.systemRole === "platform_admin" && <Route path="/users" element={<Users />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

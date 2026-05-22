@@ -4,6 +4,59 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Web Dashboard Milestone (2026-05-22 — Part 2)
+
+### What Was Confirmed & Verified
+- Frontend premium web dashboard compiles and builds successfully under production settings using Vite with zero TypeScript typecheck errors.
+- Visual components fully integrated and layout responsiveness verified.
+- Client-side live telemetry aggregates, status filter controls, and OTA controls checked against server schemas.
+
+### What Changed
+- **`frontend/src/index.css`**: Configured custom Google Fonts (`Inter`, `Outfit`), beautiful modern HSL variables for dark glassmorphic styling, pulse animations for active statuses, and interactive transitions.
+- **`frontend/src/api.ts`**: Introduced `deviceAction`, `deviceOta`, and `releases` client endpoints supporting remote actions.
+- **`frontend/src/pages/Devices.tsx`**: Replaced standard structure with complete search filters, a detailed controls tab (Reboot and admin OTA version selection), Vietnamese labels matching bot standards, and cosmetic hour mapping normalizations for Recharts hourly charts.
+- **`frontend/src/pages/Dashboard.tsx`**: Upgraded layout to display live stats aggregations (total active power, total current, average voltage across all online devices) along with an interactive progress ratio indicator and fleet table quick-launch modal triggers.
+- **`frontend/src/App.tsx`**: Injected user session objects as standard props into `<Dashboard user={user} />` and `<Devices user={user} />`.
+
+### Remaining Issues
+- None. All typescript and bundling steps are 100% complete and exit code is 0.
+
+### Exact Next Step
+- Run standard Git commit & push, and run deployment commands to VPS to deploy the new dashboard interface.
+
+### Relevant Build Evidence
+- **TypeScript compile check**: `node.exe node_modules/typescript/bin/tsc -b` -> PASS (Exit: 0)
+- **Vite production bundle**: `node.exe node_modules/vite/bin/vite.js build` -> PASS (Exit: 0)
+
+---
+
+## Session Delta (2026-05-22 — Part 1)
+
+### What Changed
+
+1. **ESP8266 (NodeMCU v2) integration into the Single Codebase** (completed, verified, uploaded to device)
+   - Updated `platformio.ini` to add the `[env:nodemcuv2]` environment, configuring appropriate libraries (`SoftwareSerial`, `LittleFS`, `ESP8266WiFi`, `ESP8266WebServer`, etc.) and the `-D BOARD_TYPE` build flag.
+   - Updated `include/Meter.h` and `src/Meter.cpp` to use `SoftwareSerial` (virtual RX=GPIO12, TX=GPIO13) specifically for the ESP8266, while retaining `HardwareSerial` for ESP32.
+   - Updated `include/WebConfig.h` to define dynamic `WebServer` routing using `ESP8266WebServer` for ESP8266 and `WebServer` for ESP32.
+   - Updated `src/ConfigManager.cpp` to support ESP8266 chip identification using `ESP.getChipId()` and handle `LittleFS` formatting and initialization compatibility.
+   - Updated `include/DataSender.h` and `src/DataSender.cpp` to set MQTT telemetry payloads with `chip_family = ESP8266` and `chip_model = ESP8266EX`, and disabled multi-threaded FreeRTOS tasks (replacing them with synchronous calls in `loop()` for ESP8266).
+   - Updated `src/main.cpp` to map PZEM serial pins dynamically based on the board type (`RX_PIN = 12, TX_PIN = 13` for ESP8266, `RX_PIN = 16, TX_PIN = 17` for ESP32).
+   - Updated `include/WiFiLedStatus.h` and `src/OTAUpdate.cpp` to resolve ESP8266 compilation conflicts, implementing a macro mapped to `ESPhttpUpdate` to maintain exact backwards compatibility.
+   - Fixed missing python dependency in build machine's python environment by installing `intelhex` via pip to resolve PlatformIO's toolchain bootloader packaging failure.
+
+2. **Compilation & Upload Verification**
+   - Successfully compiled the firmware for **both** platforms:
+     - `pio run -e nodemcuv2` -> **SUCCESS**
+     - `pio run -e esp32doit-devkit-v1` -> **SUCCESS** (ensuring complete backwards compatibility)
+   - Flashed the compiled binary onto the physical ESP8266 device via **`COM3`** successfully.
+   - Monitored the serial logs at `115200` baud: confirmed successful SPIFFS/LittleFS loading, configuration recovery, device registration (`Device ID: 3`, `Serial: SN003`), and starting the captive WiFi Manager portal (`PZEM_Meter_936C`).
+
+### Next Steps
+
+1. Configure WiFi SSID and password via the ESP8266 captive portal (`PZEM_Meter_936C` at `192.168.4.1`) or let it connect to `MAX AUTO` if configured.
+2. Confirm the telemetry data from `SN003` is correctly published to the MQTT broker (`113.161.220.166`) and visible in the VPS MongoDB / Web dashboard.
+3. Test physical PZEM-004T v3.0 measurements on ESP8266 under load once connected.
+
 ## Session Delta (2026-05-21 — part 2)
 
 ### What Changed
