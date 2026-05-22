@@ -4,6 +4,30 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Web Dashboard Security Scoping & Device Renaming Milestone (2026-05-23)
+
+### What Was Confirmed & Verified
+- **Backend Security Scoping**: Successfully mounted `/devices`, `/ota`, `/admin`, and `/internal` behind `authMiddleware` inside [http.ts](file:///c:/local/opencode/iot/esp32_loss_power/backend/src/http.ts) to resolve public access vulnerabilities.
+- **Inter-service Secrets**: Enabled `X-Internal-Key` verification in [auth.ts](file:///c:/local/opencode/iot/esp32_loss_power/backend/src/auth.ts) to permit secure bot-to-backend communication via a shared `JWT_SECRET` key.
+- **Device Access Middleware**: Implemented `checkDeviceAccess` in [devices.ts](file:///c:/local/opencode/iot/esp32_loss_power/backend/src/routes/devices.ts), strictly blocking regular users from viewing or controlling devices outside their assigned tenant.
+- **Device Renaming**: Programmed friendly display name updates in `DeviceRepo` ([device.repo.ts](file:///c:/local/opencode/iot/esp32_loss_power/backend/src/db/device.repo.ts)) with automated auditable events logged in `audit_events`.
+- **UI Renaming Panel**: Redesigned the header inside `DeviceDetail` in [Devices.tsx](file:///c:/local/opencode/iot/esp32_loss_power/frontend/src/pages/Devices.tsx) with a sleek inline toggle input, including state synchronization back to the lists in `Devices.tsx` and `Dashboard.tsx` dynamically.
+- **Production Build and Deploy**: Both frontend and backend compile cleanly under production configurations, built successfully, and deployed on the VPS via `docker-compose`. Live health is 100% OK.
+
+### What Changed
+- **`backend/src/routes/devices.ts`**: Added middleware `checkDeviceAccess`, put endpoint `PUT /:deviceId` for renaming, cast parameter calls to resolve compiler type conflicts in Express 5.
+- **`frontend/src/api.ts`**: Added `renameDevice` method inside `api` client.
+- **`frontend/src/pages/Devices.tsx`**: Added editing states, `handleRename`, keyboard shortcut listener, updated modal header, and set parent synchronization callback.
+- **`frontend/src/pages/Dashboard.tsx`**: Injected name sync callback when triggering the modal.
+
+### Remaining Issues
+- None. All security and renaming objectives are completely implemented and verified in production.
+
+### Exact Next Step
+- Provide the user with details about how to test the security boundaries and rename claimed devices on the live web dashboard.
+
+---
+
 ## ESP8266 OTA Verification Milestone (2026-05-22 — Part 3)
 
 ### What Was Confirmed & Verified
