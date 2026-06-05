@@ -4,6 +4,52 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Web Dashboard Monthly & Custom Range Analytics Milestone (2026-06-06)
+
+### What Was Confirmed & Verified
+- **Custom Range Daily Breakdown**: Generalized `getPeakDayLast7Days` to `getPeakDayAnalytics` inside `analytics.repo.ts` to compute daily rollups dynamically for any `EnergyRangeOptions` range.
+- **Param-Driven Endpoint**: Exposed parameters (`preset`, `startDate`, `endDate`) on `/devices/:deviceId/analytics/peak-day` endpoint in `routes/devices.ts`.
+- **Dynamic Frontend Selection Panel**: Built range selectors in the **Analytics** tab of the `DeviceDetail` modal (`Devices.tsx`) showing presets (7 days, this month, last month) and custom date calendar pickers.
+- **Successful Builds**: Verified that both backend and frontend compile with zero errors in production configuration.
+
+### What Changed
+- **`backend/src/db/analytics.repo.ts`**: Implemented `getPeakDayAnalytics` and updated `getPeakDayLast7Days` to use it.
+- **`backend/src/mongodb.ts`**: Exposed `getPeakDayAnalytics` delegate.
+- **`backend/src/routes/devices.ts`**: Added query parameter checks and error handler to the peak-day endpoint.
+- **`frontend/src/api.ts`**: Modified `peakDay` client method to append range options to query string.
+- **`frontend/src/pages/Devices.tsx`**: Added selector states, `fetchDailyEnergy` function, and a dynamic control panel in the analytics tab layout.
+- **`handoff.md`**: Created the project handoff description at root.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Deploy the updated container images to the VPS and run integration checks on the web UI.
+
+---
+
+## Unified Full Backup & Restore System Milestone (2026-05-23)
+
+### What Was Confirmed & Verified
+- **Local Docker Test Suite (WSL)**: Successfully installed Docker/Compose inside WSL Ubuntu, configured a mock `esp32losspowerdeploy_mongodb_1` container, wrote test telemetry data, triggered `backup-meter.sh`, verified AES-256 archive encryption locally, wiped the mock database completely, ran `restore-meter.sh --file <backup>` with dynamic compose resolution, and verified 100% data and configuration recovery with zero errors.
+- **Production VPS Backup Execution**: Successfully made remote rclone binary executable (`/home/tma_agi/rclone`), deployed updated scripts, and triggered a live production backup run. Verified that it dumps the production `esp32_power_monitor` database, bundles configurations, encrypts via AES-256, and successfully synchronizes to Google Drive (`tma-agi-backup:esp32_meter`).
+- **Production VPS Restore Dry-run**: Executed `restore-meter.sh --list` on VPS, confirming that it can successfully discover and list remote encrypted backups from Google Drive.
+- **Crontab Scheduling**: Ran `setup-backup-cron.sh` on the VPS to automatically clean up obsolete local-only backup scripts and register the new unified backup schedule (daily at 03:00 AM) with automatic 7-day retention checks.
+
+### What Changed
+- **`scripts/backup-meter.sh`** [NEW]: Script for database dumping, configuration gathering, AES-256 encryption, rclone cloud synchronization, and 7-day local/remote cleanup. Gracefully handles root-owned system files.
+- **`scripts/restore-meter.sh`** [NEW]: Script for automated disaster recovery, support local-offline restore fallbacks, dynamic compose version resolvers (`docker compose` vs `docker-compose`), container recreation, and database restoration.
+- **`scripts/setup-backup-cron.sh`** [NEW]: Automated cron installer that updates the crontab in an idempotent way.
+- **`docs/backup-restore-guide.md`** [NEW]: Detailed step-by-step disaster recovery manual in Vietnamese for spinning up and restoring a new VPS from scratch.
+
+### Remaining Issues
+- None. System backup & restore capability is fully completed, tested, and automated.
+
+### Exact Next Step
+- Advise the user to secure their encryption passphrase (`JWT_SECRET` or custom `BACKUP_PASSPHRASE` from `.env.prod`) which is essential for decrypting backups in a complete disaster recovery scenario.
+
+---
+
 ## Web Dashboard Security Scoping & Device Renaming Milestone (2026-05-23)
 
 ### What Was Confirmed & Verified

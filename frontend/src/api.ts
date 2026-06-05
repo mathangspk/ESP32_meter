@@ -32,7 +32,14 @@ export const api = {
     req<void>("PUT", `/dashboard/users/${userId}`, data),
   deleteUser: (userId: string) => req<void>("DELETE", `/dashboard/users/${userId}`),
   tenants: () => req<Tenant[]>("GET", "/dashboard/tenants"),
-  peakDay: (serial: string) => req<PeakDaySummary>("GET", `/devices/${serial}/analytics/peak-day`),
+  peakDay: (serial: string, options?: { preset?: string; startDate?: string; endDate?: string }) => {
+    const params = new URLSearchParams();
+    if (options?.preset) params.append("preset", options.preset);
+    if (options?.startDate) params.append("startDate", options.startDate);
+    if (options?.endDate) params.append("endDate", options.endDate);
+    const qs = params.toString();
+    return req<PeakDaySummary>("GET", `/devices/${serial}/analytics/peak-day${qs ? `?${qs}` : ""}`);
+  },
   hourly: (serial: string, date = "today") => req<HourlyBreakdown>("GET", `/devices/${serial}/analytics/hourly?date=${date}`),
   deviceAction: (deviceId: string, action: string) => req<{ success: boolean; message?: string }>("POST", `/devices/${deviceId}/actions`, { action }),
   deviceOta: (deviceId: string, version: string) => req<{ jobId: string; status: string }>("POST", `/devices/${deviceId}/ota`, { version }),

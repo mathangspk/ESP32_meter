@@ -186,6 +186,9 @@ export class MongoService {
     return this.analyticsRepo.getDeviceEnergyAnalytics(identifier, options);
   }
   getPeakDayLast7Days(identifier: string) { return this.analyticsRepo.getPeakDayLast7Days(identifier); }
+  getPeakDayAnalytics(identifier: string, options?: EnergyRangeOptions) {
+    return this.analyticsRepo.getPeakDayAnalytics(identifier, options);
+  }
   getHourlyBreakdown(identifier: string, date: string) { return this.analyticsRepo.getHourlyBreakdown(identifier, date); }
 
   // --- Cross-domain aggregates ---

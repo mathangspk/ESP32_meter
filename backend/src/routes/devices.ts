@@ -160,9 +160,23 @@ devicesRouter.post("/:deviceId/ota", checkDeviceAccess, async (req, res) => {
 });
 
 devicesRouter.get("/:deviceId/analytics/peak-day", checkDeviceAccess, async (req, res) => {
-  const summary = await mongoService.getPeakDayLast7Days(String(req.params.deviceId));
-  if (!summary) { res.status(404).json({ error: "Device not found" }); return; }
-  res.json(summary);
+  const preset = req.query.preset ? String(req.query.preset) : undefined;
+  const startDate = req.query.startDate ? String(req.query.startDate) : undefined;
+  const endDate = req.query.endDate ? String(req.query.endDate) : undefined;
+
+  try {
+    const options = preset
+      ? { preset: preset as any }
+      : startDate && endDate
+      ? { startDate, endDate }
+      : undefined;
+
+    const summary = await mongoService.getPeakDayAnalytics(String(req.params.deviceId), options);
+    if (!summary) { res.status(404).json({ error: "Device not found" }); return; }
+    res.json(summary);
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to get daily energy breakdown" });
+  }
 });
 
 devicesRouter.get("/:deviceId/analytics/hourly", checkDeviceAccess, async (req, res) => {

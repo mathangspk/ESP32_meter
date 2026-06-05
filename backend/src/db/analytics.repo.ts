@@ -346,6 +346,13 @@ export class AnalyticsRepo {
   }
 
   async getPeakDayLast7Days(identifier: string): Promise<DevicePeakDaySummary | null> {
+    return this.getPeakDayAnalytics(identifier);
+  }
+
+  async getPeakDayAnalytics(
+    identifier: string,
+    options?: EnergyRangeOptions
+  ): Promise<DevicePeakDaySummary | null> {
     const device = await this.deviceRepo.getDeviceHealth(identifier);
     if (!device) return null;
 
@@ -353,9 +360,32 @@ export class AnalyticsRepo {
     const siteTimezone = site?.timezone || DEFAULT_SITE_TIMEZONE;
     const now = new Date();
 
-    const { dayStart: todayStart, dayEnd: todayEnd } = getLocalDayBounds(now, siteTimezone);
-    const rangeStart = addLocalDays(todayStart, siteTimezone, -6);
-    const rangeEnd = todayEnd;
+    let rangeStart: Date;
+    let rangeEnd: Date;
+    let dayCount: number;
+
+    if (options) {
+      if ("preset" in options) {
+        const range = resolveEnergyPresetRange(options.preset, now, siteTimezone);
+        rangeStart = range.rangeStart;
+        rangeEnd = range.rangeEnd;
+        dayCount = range.dayCount;
+      } else {
+        const range = resolveCustomDateRange(options.startDate, options.endDate, siteTimezone);
+        rangeStart = range.rangeStart;
+        rangeEnd = range.rangeEnd;
+        dayCount = range.dayCount;
+      }
+    } else {
+      const { dayStart: todayStart, dayEnd: todayEnd } = getLocalDayBounds(now, siteTimezone);
+      rangeStart = addLocalDays(todayStart, siteTimezone, -6);
+      rangeEnd = todayEnd;
+      dayCount = 7;
+    }
+
+    if (dayCount > 90) {
+      throw new Error("Date range cannot exceed 90 days");
+    }
 
     const segments = buildRangeSegments(rangeStart, rangeEnd, siteTimezone);
     const segmentResults = await Promise.all(

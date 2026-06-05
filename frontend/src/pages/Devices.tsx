@@ -9,6 +9,21 @@ export function DeviceDetail({ device, user, onClose, onDeviceUpdated }: { devic
   const [hourly, setHourly] = useState<HourlyBreakdown | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
+  // Analytics Range States
+  const getTodayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const getPastDateStr = (daysAgo: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  const [analyticsRangeType, setAnalyticsRangeType] = useState<"last_7_days" | "this_month" | "last_month" | "custom">("last_7_days");
+  const [customStart, setCustomStart] = useState(getPastDateStr(7));
+  const [customEnd, setCustomEnd] = useState(getTodayStr());
+
   // Rename States
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(device.displayName ?? device.serialNumber);
@@ -45,11 +60,39 @@ export function DeviceDetail({ device, user, onClose, onDeviceUpdated }: { devic
     }
   };
 
+  const getChartTitle = () => {
+    if (analyticsRangeType === "last_7_days") return "Điện năng tiêu thụ — 7 ngày gần đây (kWh)";
+    if (analyticsRangeType === "this_month") return "Điện năng tiêu thụ — Tháng này (kWh)";
+    if (analyticsRangeType === "last_month") return "Điện năng tiêu thụ — Tháng trước (kWh)";
+    return `Điện năng tiêu thụ — Từ ${customStart} đến ${customEnd} (kWh)`;
+  };
+
+  const fetchDailyEnergy = (rangeType: string, start?: string, end?: string) => {
+    setAnalyticsLoading(true);
+    const options: any = {};
+    if (rangeType === "custom") {
+      options.startDate = start;
+      options.endDate = end;
+    } else {
+      options.preset = rangeType;
+    }
+
+    api.peakDay(device.serialNumber, options)
+      .then((data) => {
+        setPeakDay(data);
+      })
+      .catch((err) => {
+        console.error(err);
+        alert(err instanceof Error ? err.message : "Lỗi khi tải dữ liệu phân tích.");
+      })
+      .finally(() => setAnalyticsLoading(false));
+  };
+
   const loadAnalytics = () => {
-    if (peakDay) return;
+    if (peakDay && hourly) return;
     setAnalyticsLoading(true);
     Promise.all([
-      api.peakDay(device.serialNumber),
+      api.peakDay(device.serialNumber, { preset: "last_7_days" }),
       api.hourly(device.serialNumber, "today"),
     ])
       .then(([pd, h]) => { setPeakDay(pd); setHourly(h); })
@@ -253,11 +296,75 @@ export function DeviceDetail({ device, user, onClose, onDeviceUpdated }: { devic
 
         {tab === "analytics" && (
           <>
+            {/* Range Selection Control Panel */}
+            <div style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              alignItems: "center",
+              marginBottom: 20,
+              padding: 12,
+              background: "rgba(255, 255, 255, 0.02)",
+              border: "1px solid var(--border)",
+              borderRadius: 8
+            }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Khoảng thời gian</span>
+                <select
+                  value={analyticsRangeType}
+                  onChange={(e) => {
+                    const type = e.target.value as any;
+                    setAnalyticsRangeType(type);
+                    if (type !== "custom") {
+                      fetchDailyEnergy(type);
+                    }
+                  }}
+                  style={{ width: 160, padding: "6px 10px", background: "rgba(0,0,0,0.2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", outline: "none" }}
+                >
+                  <option value="last_7_days">7 ngày gần đây</option>
+                  <option value="this_month">Tháng này</option>
+                  <option value="last_month">Tháng trước</option>
+                  <option value="custom">Tùy chọn...</option>
+                </select>
+              </div>
+
+              {analyticsRangeType === "custom" && (
+                <>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Từ ngày</span>
+                    <input
+                      type="date"
+                      value={customStart}
+                      onChange={(e) => setCustomStart(e.target.value)}
+                      style={{ padding: "5px 10px", background: "rgba(0,0,0,0.2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", outline: "none" }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Đến ngày</span>
+                    <input
+                      type="date"
+                      value={customEnd}
+                      onChange={(e) => setCustomEnd(e.target.value)}
+                      style={{ padding: "5px 10px", background: "rgba(0,0,0,0.2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", outline: "none" }}
+                    />
+                  </div>
+                  <button
+                    className="btn-primary"
+                    style={{ alignSelf: "flex-end", padding: "7px 16px", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer" }}
+                    onClick={() => fetchDailyEnergy("custom", customStart, customEnd)}
+                    disabled={analyticsLoading}
+                  >
+                    Xem
+                  </button>
+                </>
+              )}
+            </div>
+
             {analyticsLoading && <div style={{ color: "var(--muted)", textAlign: "center", padding: 32 }}>Đang tải dữ liệu…</div>}
 
             {!analyticsLoading && peakDay && (
               <div style={{ marginBottom: 28 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13 }}>Điện năng tiêu thụ — 7 ngày gần nhất (kWh)</div>
+                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>{getChartTitle()}</div>
                 {peakDay.dataStatus === "ok" || peakDay.dailyBreakdown.some(d => d.energyKwh !== undefined) ? (
                   <ResponsiveContainer width="100%" height={180}>
                     <BarChart data={peakDay.dailyBreakdown.map(d => ({ date: d.date.slice(5), kWh: +(d.energyKwh?.toFixed(3) ?? 0) }))}>
@@ -269,13 +376,13 @@ export function DeviceDetail({ device, user, onClose, onDeviceUpdated }: { devic
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div style={{ color: "var(--muted)", fontSize: 13, padding: "12px 0" }}>
+                  <div style={{ color: "var(--muted)", fontSize: 13, padding: "24px 0", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 6 }}>
                     Không đủ dữ liệu ({peakDay.dataStatus})
                   </div>
                 )}
                 {peakDay.peakDate && (
-                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>
-                    Ngày dùng nhiều nhất: {peakDay.peakDate} — {peakDay.peakDayEnergyKwh?.toFixed(3)} kWh
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>
+                    Ngày dùng nhiều nhất: <strong>{peakDay.peakDate}</strong> — {peakDay.peakDayEnergyKwh?.toFixed(3)} kWh
                   </div>
                 )}
               </div>
