@@ -7,6 +7,7 @@ import {
   getLocalMonthStart,
   getInclusiveLocalDayCount,
   zonedDateTimeToUtc,
+  getTimeZoneParts,
 } from "./analytics.timezone";
 
 export function resolveEnergyPresetRange(preset: EnergyAnalyticsPreset, now: Date, timeZone: string): TimeRange {
@@ -74,11 +75,7 @@ export function resolveCustomDateRange(startDate: string, endDate: string, timeZ
 }
 
 export function getSegmentEnd(cursor: Date, rangeEnd: Date, timeZone: string) {
-  const local = {
-    year: cursor.getUTCFullYear(),
-    month: cursor.getUTCMonth() + 1,
-    day: cursor.getUTCDate(),
-  }; // Use simplified check to keep helper fast
+  const local = getTimeZoneParts(cursor, timeZone);
   const dayStart = zonedDateTimeToUtc({ year: local.year, month: local.month, day: local.day }, timeZone);
   const nextDayStart = addLocalDays(dayStart, timeZone, 1);
   return nextDayStart < rangeEnd ? nextDayStart : rangeEnd;
