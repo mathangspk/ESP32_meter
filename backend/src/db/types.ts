@@ -99,6 +99,7 @@ export type DeviceRecord = {
   lifecycleStatus: DeviceLifecycleStatus;
   lastFirmwareVersion?: string;
   macAddress?: string;
+  ipAddress?: string;
   chipFamily?: string;
   chipModel?: string;
   boardType?: string;

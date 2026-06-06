@@ -72,6 +72,7 @@ export type Device = {
   lifecycleStatus: string;
   lastFirmwareVersion?: string;
   lastSeenAt?: string;
+  ipAddress?: string;
   state?: {
     isOffline: boolean;
     lastVoltage: number;

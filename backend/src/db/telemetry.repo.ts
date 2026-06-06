@@ -227,6 +227,7 @@ export class TelemetryRepo {
       deviceId: payload.device_id,
       lastSeenAt: now,
       lastFirmwareVersion: payload.firmware_version,
+      ipAddress: payload.ip_address,
       updatedAt: now,
     };
 

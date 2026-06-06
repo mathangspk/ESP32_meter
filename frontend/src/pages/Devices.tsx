@@ -255,12 +255,17 @@ export function DeviceDetail({ device, user, onClose, onDeviceUpdated }: { devic
                 ["Serial", device.serialNumber],
                 ["Trạng thái", device.state?.isOffline === false ? "Online" : "Offline"],
                 ["Firmware", device.lastFirmwareVersion ?? "—"],
+                ["Địa chỉ IP", device.ipAddress ? (
+                  <a href={`http://${device.ipAddress}`} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+                    {device.ipAddress}
+                  </a>
+                ) : "—"],
                 ["Điện áp", device.state?.lastVoltage ? `${device.state.lastVoltage.toFixed(1)} V` : "— V"],
                 ["Dòng điện", device.state?.lastCurrent ? `${device.state.lastCurrent.toFixed(3)} A` : "— A"],
                 ["Công suất", device.state?.lastPower ? `${device.state.lastPower.toFixed(0)} W` : "— W"],
               ].map(([k, v]) => (
-                <div key={k} className="card" style={{ padding: "12px 16px" }}>
-                  <div style={{ color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{k}</div>
+                <div key={k as string} className="card" style={{ padding: "12px 16px" }}>
+                  <div style={{ color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{k as string}</div>
                   <div style={{ fontWeight: 600 }}>{v}</div>
                 </div>
               ))}

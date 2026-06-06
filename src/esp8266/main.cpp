@@ -56,7 +56,7 @@ void setup()
         configManager.getConfig().mqtt_password.c_str(),
         configManager.getConfig().mqtt_username.c_str());
 
-    networkManager.connect();
+    networkManager.connect(&configManager);
     meter.syncTime();
     dataSender.setup();
     // Khởi tạo DataReceiver, truyền client từ dataSender
@@ -103,7 +103,7 @@ void loop()
             if (networkManager.getWifiReconnectAttempts() < networkManager.getMaxWifiReconnectAttempts())
             {
                 Serial.println("⚠️ Mất kết nối WiFi! Đang thử kết nối lại...");
-                networkManager.reconnect();
+                networkManager.reconnect(&configManager);
                 networkManager.incrementWifiReconnectAttempts();
             }
             else
