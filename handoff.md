@@ -1,24 +1,24 @@
-# Project Handoff - VPS Setup, Hardening & Restoration
+# Project Handoff - Firmware IP Update & SSH Config
 
 ## Summary of Changes
-- **SSH Key-Only Hardening**: Configured key-only SSH authentication for user `technician` on the new VPS (`167.71.207.5`). Password-based logins over SSH have been completely disabled.
-- **Dynamic Path & Container Resolution**: Modified `scripts/restore-meter.sh`, `scripts/backup-meter.sh`, and `scripts/setup-backup-cron.sh` to make user home directories dynamic (using `$HOME` instead of hardcoded `/home/tma_agi`). Modified container resolution to dynamically search for the running MongoDB container name (ends with `-mongodb-1` or `_mongodb_1`) rather than a hardcoded name.
-- **Robust Pattern Searching**: Added the double hyphen `--` option separator to `grep` pattern checks inside the scripts to prevent patterns starting with `-` (like `-mongodb-1$`) from being interpreted as CLI options.
-- **Disaster Recovery Restore**: Executed `restore-meter.sh --latest` using the retrieved production `JWT_SECRET` key. Successfully downloaded the latest backup from Google Drive, decrypted it, restored all database collections, and recreated configurations.
-- **Daily Automated Backup Setup**: Re-enabled automated daily backups on the new VPS using `setup-backup-cron.sh`.
+- **Firmware Default IP Update**: Modified the default fallback MQTT server IP address from `113.161.220.166` (old VPS) to `167.71.207.5` (new VPS) across both ESP32 and ESP8266 platforms.
+- **Local SSH Config updated**: Configured the local SSH alias `vps-prod` inside `~/.ssh/config` to point to the new VPS (`167.71.207.5`) as user `technician` using the `do_ssh_key` private key.
+- **Compiled Updated Firmware**: Successfully compiled the updated firmware binaries locally using PlatformIO for both targets (`esp32doit-devkit-v1` and `nodemcuv2`).
+- **Binary Deploy to VPS**: Copied the compiled `esp32-meter-1.0.2.bin` and `esp8266-meter-1.0.2.bin` to the VPS under `/home/technician/esp32_loss_power_deploy/firmware-host/`.
+- **Served Binaries for OTA**: Started the python HTTP server (`esp32-firmware-host`) on the VPS serving port `8081` to allow devices to pull OTA firmware updates.
 
 ## Current System State
-- All 5 docker containers are up and running on the new VPS (`167.71.207.5`).
-- The backend health status is `ok` with successful connections to both MQTT and MongoDB.
-- SSH access is locked down to key-only authentication via `do_ssh_key`. Password-based logins are disabled.
-- Automated daily backup cron job is active.
+- The new VPS is active and all Docker services are running healthy.
+- Local SSH commands using `ssh vps-prod` now target the new VPS under `technician` key-only access.
+- Local codebase is updated with default configurations matching the new VPS.
 
 ## Verification & Testing
-- **SSH Verification**: Tested key-only SSH login which connects successfully. Confirmed that password-based authentication is rejected with `Permission denied (publickey)`.
-- **Backend Health Check**: Executed `curl -sS http://127.0.0.1:3005/healthz` inside the VPS. Output: `{"status":"ok","uptimeSeconds":339,"mqttConnected":true,"mongodbConnected":true}`.
-- **Database Restoration**: Verified that MongoDB database was restored successfully from the decrypted `.enc` Google Drive archive.
-- **Backup Verification**: Triggered a test backup by running `backup-meter.sh` on the VPS. Verified that it dumps the restored DB, AES-256 encrypts the archive, uploads it to Google Drive remote (`tma-agi-backup:esp32_meter`), and successfully applies the 7-day retention cleanup.
+- **Compilation Check**: Ran `pio run` locally and verified both builds succeeded:
+  - ESP32 build: RAM (55.0% used), Flash (53.1% used) -> SUCCESS.
+  - ESP8266 build: RAM (55.0% used), Flash (53.1% used) -> SUCCESS.
+- **Binary Retrieval Check**: Verified the static server correctly hosts the files:
+  `curl -I http://127.0.0.1:8081/esp32-meter-1.0.2.bin` returns `HTTP/1.0 200 OK` (1,152,112 bytes).
 
 ## Next Steps
-- Advise the user to access the web dashboard at `http://167.71.207.5:8080` to verify restored devices and historical telemetry.
-- Monitor telemetry of active meters on the new VPS.
+- Explain to the user how they can configure their physical devices to connect to the new VPS.
+- Provide instructions for upgrading the devices via OTA (through the Web Dashboard) or flashing them locally via USB.

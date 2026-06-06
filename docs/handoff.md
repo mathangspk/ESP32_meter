@@ -4,6 +4,30 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Firmware Fallback IP Update Milestone (2026-06-06)
+
+### What Was Confirmed & Verified
+- **Firmware Fallback IP Update**: Updated the default hardcoded MQTT server IP from the old IP (`113.161.220.166`) to the new VPS IP (`167.71.207.5`) across both ESP32 and ESP8266 source directories.
+- **Flawless Compilation**: Verified that the modified firmware compiles successfully using PlatformIO for both targets (`esp32doit-devkit-v1` and `nodemcuv2`).
+- **Binary Deploy to VPS**: Transferred the new compiled binaries to `/home/technician/esp32_loss_power_deploy/firmware-host/` on the VPS and restarted the python HTTP static server on port `8081` to serve the binaries for OTA updates. Verified URL downloading.
+- **Local SSH Config updated**: Configured the local `vps-prod` SSH alias to point directly to the new VPS (`167.71.207.5`) as the `technician` user with the `do_ssh_key` private key.
+
+### What Changed
+- **`src/esp32/ConfigManager.cpp`**: Changed default MQTT server IP to `167.71.207.5`.
+- **`src/esp32/DataSender.cpp`**: Changed fallback MQTT broker IP to `167.71.207.5`.
+- **`src/esp8266/ConfigManager.cpp`**: Changed default MQTT server IP to `167.71.207.5`.
+- **`src/esp8266/DataSender.cpp`**: Changed fallback MQTT broker IP to `167.71.207.5`.
+- **`C:\Users\technician\.ssh\config`**: Updated `vps-prod` host alias.
+- **`docs/handoff.md`**: Prepend this milestone to the top.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Advise the user to perform OTA updates or local USB flashing using the compiled binaries.
+
+---
+
 ## VPS Restoration & Security Hardening Milestone (2026-06-06)
 
 ### What Was Confirmed & Verified

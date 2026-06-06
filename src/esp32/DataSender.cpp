@@ -16,7 +16,7 @@
 extern ConfigManager configManager;
 
 DataSender::DataSender()
-    : mqttServer("113.161.220.166"), mqttPort(1883), deviceId(""), serialNumber(""),
+    : mqttServer("167.71.207.5"), mqttPort(1883), deviceId(""), serialNumber(""),
       client(wifiClient), bufferIndex(0), bufferCount(0)
 {
     client.setBufferSize(8192);

@@ -28,7 +28,7 @@ bool ConfigManager::initFS()
 
 void ConfigManager::setDefaults()
 {
-    config.mqtt_server = "113.161.220.166";
+    config.mqtt_server = "167.71.207.5";
     config.mqtt_port = 1883;
     config.device_id = "";
     config.serial_number = "";
