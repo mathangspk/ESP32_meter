@@ -158,6 +158,7 @@ export default function Dashboard({ user }: { user?: User }) {
             <tr>
               <th>Tên thiết bị</th>
               <th>Số Serial</th>
+              <th>Địa chỉ IP</th>
               <th>Trạng thái</th>
               <th>Điện áp</th>
               <th>Dòng điện</th>
@@ -170,6 +171,21 @@ export default function Dashboard({ user }: { user?: User }) {
               <tr key={d.deviceId} style={{ cursor: "pointer" }} onClick={() => setSelected(d)}>
                 <td style={{ fontWeight: 500 }}>{d.displayName ?? d.serialNumber}</td>
                 <td style={{ color: "var(--muted)", fontFamily: "monospace", fontSize: 12 }}>{d.serialNumber}</td>
+                <td>
+                  {d.ipAddress ? (
+                    <a
+                      href={`http://${d.ipAddress}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ color: "var(--accent)", textDecoration: "underline" }}
+                    >
+                      {d.ipAddress}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td>
                   {d.state?.isOffline === false ? (
                     <span className="badge badge-green">● Online</span>

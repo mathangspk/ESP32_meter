@@ -4,6 +4,27 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Web Dashboard IP Display & Firmware OTA Update v1.0.2 Milestone (2026-06-06)
+
+### What Was Confirmed & Verified
+- **Frontend Dashboard IP Column**: Added an "Địa chỉ IP" (Internal IP) column directly to the devices tables in both `Dashboard.tsx` and `Devices.tsx`. The IP address is displayed as a link that opens the device web interface in a new tab without opening the details modal.
+- **Firmware Version v1.0.2 Build**: Successfully compiled ESP32 and ESP8266 firmwares with `FIRMWARE_VERSION="1.0.2"`.
+- **VPS Binary Deployment**: Copied `esp32-meter-1.0.2.bin` and `esp8266-meter-1.0.2.bin` to `/home/tma_agi/esp32_loss_power_deploy/firmware-host/` on the VPS.
+- **OTA Job Triggered**: Registered the new firmware releases in MongoDB and triggered OTA updates for active devices (`7B34E3EC` & `004A936C`). ESP32 device confirmed transition to `received` -> `downloading`.
+
+### What Changed
+- **`frontend/src/pages/Dashboard.tsx`**: Added IP address column with link click propagation handling.
+- **`frontend/src/pages/Devices.tsx`**: Added IP address column to list view.
+- **`handoff.md`**: Updated the root handoff description.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Push code to origin, pull the updated frontend image on VPS, and verify telemetry reports of the devices running firmware `1.0.2`.
+
+---
+
 ## Web Dashboard Monthly & Custom Range Analytics Milestone (2026-06-06)
 
 ### What Was Confirmed & Verified
