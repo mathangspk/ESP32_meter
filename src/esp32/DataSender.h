@@ -19,7 +19,7 @@ public:
     void sendBufferedData();
     void addToBuffer(float voltage, float current, float power, float energy, String IPAddress);
     bool isConnected();
-    void updateConfig(const char *mqttServer, int mqttPort, const char *deviceId, const char *serialNumber, const char *mqttPassword, const char *mqttUser); // sửa hàm này
+    void updateConfig(const char *mqttServer, int mqttPort, const char *mqttServerBackup, int mqttPortBackup, const char *deviceId, const char *serialNumber, const char *mqttPassword, const char *mqttUser);
     PubSubClient &getClient();
 
 private:
@@ -51,11 +51,15 @@ private:
 
     String mqttServer;
     int mqttPort;
+    String mqttServerBackup;
+    int mqttPortBackup;
+    int consecutiveFailures = 0;
+    bool isUsingBackup = false;
+    unsigned long lastPrimaryCheck = 0;
     String deviceId;
     String serialNumber;
-    String mqttPassword; // thêm thuộc tính này
-    String mqttUser;     // thêm thuộc tính này
-    // thêm thuộc tính này
+    String mqttPassword;
+    String mqttUser;
     WiFiClient wifiClient;
     PubSubClient client;
 

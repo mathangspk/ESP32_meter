@@ -4,6 +4,8 @@ bool ConfigManager::updateConfig(const String &key, const String &value)
 {
     if (key == "mqtt_server") {
         config.mqtt_server = value;
+    } else if (key == "mqtt_server_backup") {
+        config.mqtt_server_backup = value;
     } else if (key == "device_id") {
         config.device_id = value;
     } else if (key == "serial_number") {
@@ -29,6 +31,8 @@ bool ConfigManager::updateConfig(const String &key, int value)
 {
     if (key == "mqtt_port") {
         config.mqtt_port = value;
+    } else if (key == "mqtt_port_backup") {
+        config.mqtt_port_backup = value;
     } else if (key == "reading_interval") {
         config.reading_interval = value;
     } else {

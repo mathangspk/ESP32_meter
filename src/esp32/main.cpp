@@ -40,6 +40,8 @@ void setup()
     dataSender.updateConfig(
         configManager.getMqttServer().c_str(),
         configManager.getMqttPort(),
+        configManager.getMqttServerBackup().c_str(),
+        configManager.getMqttPortBackup(),
         configManager.getDeviceId().c_str(),
         configManager.getSerialNumber().c_str(),
         configManager.getConfig().mqtt_password.c_str(),

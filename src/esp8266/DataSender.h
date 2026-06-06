@@ -21,23 +21,12 @@ public:
     void sendBufferedData();
     void addToBuffer(float voltage, float current, float power, float energy, String IPAddress);
     bool isConnected();
-    void updateConfig(const char *mqttServer, int mqttPort, const char *deviceId, const char *serialNumber, const char *mqttPassword, const char *mqttUser); // sửa hàm này
+    void updateConfig(const char *mqttServer, int mqttPort, const char *mqttServerBackup, int mqttPortBackup, const char *deviceId, const char *serialNumber, const char *mqttPassword, const char *mqttUser);
     PubSubClient &getClient();
 
 private:
-    struct PendingOtaStatus
-    {
-        String jobId;
-        String status;
-        String message;
-        String targetVersion;
-    };
-
-    struct OtaTaskContext
-    {
-        DataSender *sender;
-        String url;
-    };
+    struct PendingOtaStatus { String jobId; String status; String message; String targetVersion; };
+    struct OtaTaskContext { DataSender *sender; String url; };
 
     void reconnect();
     void processCompletedOta();
@@ -53,24 +42,20 @@ private:
 
     String mqttServer;
     int mqttPort;
+    String mqttServerBackup;
+    int mqttPortBackup;
+    int consecutiveFailures = 0;
+    bool isUsingBackup = false;
+    unsigned long lastPrimaryCheck = 0;
     String deviceId;
     String serialNumber;
-    String mqttPassword; // thêm thuộc tính này
-    String mqttUser;     // thêm thuộc tính này
-    // thêm thuộc tính này
+    String mqttPassword;
+    String mqttUser;
     WiFiClient wifiClient;
     PubSubClient client;
 
     static const int BUFFER_SIZE = 10;
-    struct BufferedData
-    {
-        float voltage;
-        float current;
-        float power;
-        float energy;
-        String IPAddress;
-        unsigned long timestamp;
-    };
+    struct BufferedData { float voltage; float current; float power; float energy; String IPAddress; unsigned long timestamp; };
     BufferedData dataBuffer[BUFFER_SIZE];
     int bufferIndex;
     int bufferCount;
@@ -80,7 +65,7 @@ private:
     OtaUpdateResult otaTaskResult = OtaUpdateResult::Failed;
 #if defined(ESP32)
     TaskHandle_t otaTaskHandle = nullptr;
-#elif defined(ESP8266)
+#else
     void* otaTaskHandle = nullptr;
 #endif
 
@@ -92,7 +77,7 @@ private:
     unsigned long otaStartedAt = 0;
 
     unsigned long lastReconnectAttempt = 0;
-    const unsigned long RECONNECT_INTERVAL = 5000; // 5 seconds
+    const unsigned long RECONNECT_INTERVAL = 5000;
     const unsigned long OTA_TIMEOUT_MS = 45000;
 };
 

@@ -15,8 +15,8 @@
 extern ConfigManager configManager;
 
 DataSender::DataSender()
-    : mqttServer("167.71.207.5"), mqttPort(1883), deviceId(""), serialNumber(""),
-      client(wifiClient), bufferIndex(0), bufferCount(0)
+    : mqttServer("167.71.207.5"), mqttPort(1883), mqttServerBackup("113.161.220.166"), mqttPortBackup(1883),
+      deviceId(""), serialNumber(""), client(wifiClient), bufferIndex(0), bufferCount(0)
 {
     client.setBufferSize(8192);
     client.setKeepAlive(120);
@@ -29,25 +29,43 @@ void DataSender::setup()
     client.setServer(mqttServer.c_str(), mqttPort);
 }
 
-void DataSender::updateConfig(const char *mqttServer, int mqttPort, const char *deviceId, const char *serialNumber, const char *mqttPassword, const char *mqttUser)
+void DataSender::updateConfig(const char *mqttServer, int mqttPort, const char *mqttServerBackup, int mqttPortBackup, const char *deviceId, const char *serialNumber, const char *mqttPassword, const char *mqttUser)
 {
     this->mqttServer = String(mqttServer);
     this->mqttPort = mqttPort;
+    this->mqttServerBackup = String(mqttServerBackup);
+    this->mqttPortBackup = mqttPortBackup;
     this->deviceId = String(deviceId);
     this->serialNumber = String(serialNumber);
     this->mqttPassword = String(mqttPassword);
     this->mqttUser = String(mqttUser);
 
+    isUsingBackup = false;
+    consecutiveFailures = 0;
+    lastPrimaryCheck = millis();
+
     if (client.connected()) client.disconnect();
     client.setServer(this->mqttServer.c_str(), this->mqttPort);
-    Serial.printf("✅ MQTT config updated: %s:%d, Device: %s, Serial: %s\n",
-                  this->mqttServer.c_str(), this->mqttPort, this->deviceId.c_str(), this->serialNumber.c_str());
+    Serial.printf("✅ MQTT config updated: %s:%d (Backup: %s:%d), Device: %s, Serial: %s\n",
+                  this->mqttServer.c_str(), this->mqttPort, this->mqttServerBackup.c_str(), this->mqttPortBackup, this->deviceId.c_str(), this->serialNumber.c_str());
 }
 
 void DataSender::loop()
 {
     if (!client.connected()) reconnect();
     client.loop();
+    if (isUsingBackup && client.connected())
+    {
+        if (millis() - lastPrimaryCheck >= 300000)
+        {
+            Serial.println("🔄 Checking if primary MQTT server is back online...");
+            client.disconnect();
+            isUsingBackup = false;
+            client.setServer(mqttServer.c_str(), mqttPort);
+            consecutiveFailures = 0;
+            lastPrimaryCheck = millis();
+        }
+    }
     flushPendingOtaStatus();
     enforceOtaTimeout();
     processCompletedOta();

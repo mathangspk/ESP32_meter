@@ -4,6 +4,36 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Active-Passive MQTT Failover Redundancy Milestone (2026-06-07)
+
+### What Was Confirmed & Verified
+- **Successful Firmware Compile**: Verified that the modified firmware compiles successfully using PlatformIO for both ESP32 (`esp32doit-devkit-v1`) and ESP8266 (`nodemcuv2`) with zero compiler/linker errors.
+- **100-Line Limit Compliance**: Confirmed that every single modified and new code file is under the 100-line code limit.
+
+### What Changed
+- **`include/WebConfigHTML.h`**: Added Backup MQTT server and port input fields to configuration HTML template.
+- **`src/esp32/` & `src/esp8266/`**:
+  * `ConfigManager.h`: Added backup server/port struct variables and getters.
+  * `ConfigManager.cpp`: Initialized backup default values and printed them in `printConfig`.
+  * `ConfigManagerIO.cpp` [DELETE]: Removed monolithic config I/O file to comply with the 100-line limit.
+  * `ConfigManagerLoad.cpp` [NEW]: Created to parse config variables from LittleFS.
+  * `ConfigManagerSave.cpp` [NEW]: Created to serialize config variables and handle defaults.
+  * `ConfigManagerUpdate.cpp`: Supported update keys for backup server/port.
+  * `WebConfig.cpp`: Handled backup configuration variables in GET `/config` and POST `/config` routes.
+  * `DataSender.h`: Added variables tracking failover state and updated `updateConfig` signature.
+  * `DataSender.cpp`: Implemented 5-minute primary check loop to fallback to primary once it is online.
+  * `DataSenderMQTT.cpp`: Programmed cycling failover connection logic upon 3 consecutive broker failures.
+  * `main.cpp`: Passed backup parameters to `updateConfig` during setup.
+- **`handoff.md`**: Updated the root handoff description.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Commit and push changes to main. Advise user to perform OTA updates or local USB flash using the compiled binaries.
+
+---
+
 ## Timezone Analytics Bug Fix Milestone (2026-06-06)
 
 ### What Was Confirmed & Verified

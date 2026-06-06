@@ -51,13 +51,15 @@ void WebConfig::handleRoot()
 void WebConfig::handleConfig()
 {
     MeterConfig config = configManager.getConfig();
-    server.send(200, "text/html", getConfigHTML(config.mqtt_server, config.mqtt_port, config.device_id, config.serial_number, config.mqtt_username, config.mqtt_password, config.reading_interval));
+    server.send(200, "text/html", getConfigHTML(config.mqtt_server, config.mqtt_port, config.mqtt_server_backup, config.mqtt_port_backup, config.device_id, config.serial_number, config.mqtt_username, config.mqtt_password, config.reading_interval));
 }
 
 void WebConfig::handleSaveConfig()
 {
     if (server.hasArg("mqtt_server")) configManager.updateConfig("mqtt_server", server.arg("mqtt_server"));
     if (server.hasArg("mqtt_port")) configManager.updateConfig("mqtt_port", server.arg("mqtt_port").toInt());
+    if (server.hasArg("mqtt_server_backup")) configManager.updateConfig("mqtt_server_backup", server.arg("mqtt_server_backup"));
+    if (server.hasArg("mqtt_port_backup")) configManager.updateConfig("mqtt_port_backup", server.arg("mqtt_port_backup").toInt());
     if (server.hasArg("device_id")) configManager.updateConfig("device_id", server.arg("device_id"));
     if (server.hasArg("serial_number")) configManager.updateConfig("serial_number", server.arg("serial_number"));
     if (server.hasArg("mqtt_user")) configManager.updateConfig("mqtt_username", server.arg("mqtt_user"));

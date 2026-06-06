@@ -9,6 +9,8 @@ struct MeterConfig
 {
     String mqtt_server;
     int mqtt_port;
+    String mqtt_server_backup;
+    int mqtt_port_backup;
     String device_id;
     String serial_number;
     int reading_interval;
@@ -41,6 +43,8 @@ public:
     // Các getter helper
     String getMqttServer() const { return config.mqtt_server; }
     int getMqttPort() const { return config.mqtt_port; }
+    String getMqttServerBackup() const { return config.mqtt_server_backup; }
+    int getMqttPortBackup() const { return config.mqtt_port_backup; }
     String getDeviceId() const { return config.device_id; }
     String getSerialNumber() const { return config.serial_number; }
     int getReadingInterval() const { return config.reading_interval; }

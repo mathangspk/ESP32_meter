@@ -20,6 +20,8 @@ void ConfigManager::setDefaults()
 {
     config.mqtt_server = "167.71.207.5";
     config.mqtt_port = 1883;
+    config.mqtt_server_backup = "113.161.220.166";
+    config.mqtt_port_backup = 1883;
     config.device_id = "";
     config.serial_number = "";
     config.reading_interval = 10000;
@@ -73,6 +75,8 @@ void ConfigManager::printConfig() const
     Serial.println("Current Configuration:");
     Serial.printf("  MQTT Server: %s\n", config.mqtt_server.c_str());
     Serial.printf("  MQTT Port: %d\n", config.mqtt_port);
+    Serial.printf("  Backup MQTT Server: %s\n", config.mqtt_server_backup.c_str());
+    Serial.printf("  Backup MQTT Port: %d\n", config.mqtt_port_backup);
     Serial.printf("  Device ID: %s\n", config.device_id.c_str());
     Serial.printf("  Serial Number: %s\n", config.serial_number.c_str());
     Serial.printf("  Reading Interval: %d ms\n", config.reading_interval);

@@ -19,7 +19,7 @@ inline String getRootHTML(const String &ssid, const String &ip, const String &ma
     return html;
 }
 
-inline String getConfigHTML(const String &mqtt_server, int mqtt_port, const String &device_id, const String &serial_number, const String &mqtt_user, const String &mqtt_password, int reading_interval) {
+inline String getConfigHTML(const String &mqtt_server, int mqtt_port, const String &mqtt_server_backup, int mqtt_port_backup, const String &device_id, const String &serial_number, const String &mqtt_user, const String &mqtt_password, int reading_interval) {
     String html = "<!DOCTYPE html><html><head><title>Configuration</title>";
     html += "<meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>";
     html += "<style>body{font-family:Arial,sans-serif;margin:20px;background:#f5f5f5}";
@@ -34,6 +34,9 @@ inline String getConfigHTML(const String &mqtt_server, int mqtt_port, const Stri
     html += "<form method='POST' action='/config'><div class='form-group'><label for='mqtt_server'>MQTT Server IP:</label>";
     html += "<input type='text' id='mqtt_server' name='mqtt_server' value='" + mqtt_server + "' required></div>";
     html += "<div class='form-group'><label for='mqtt_port'>MQTT Port:</label><input type='number' id='mqtt_port' name='mqtt_port' value='" + String(mqtt_port) + "' required></div>";
+    html += "<div class='form-group'><label for='mqtt_server_backup'>Backup MQTT Server IP:</label>";
+    html += "<input type='text' id='mqtt_server_backup' name='mqtt_server_backup' value='" + mqtt_server_backup + "' required></div>";
+    html += "<div class='form-group'><label for='mqtt_port_backup'>Backup MQTT Port:</label><input type='number' id='mqtt_port_backup' name='mqtt_port_backup' value='" + String(mqtt_port_backup) + "' required></div>";
     html += "<div class='form-group'><label for='device_id'>Device ID:</label><input type='text' id='device_id' name='device_id' value='" + device_id + "' required></div>";
     html += "<div class='form-group'><label for='serial_number'>Serial Number:</label><input type='text' id='serial_number' name='serial_number' value='" + serial_number + "' required></div>";
     html += "<div class='form-group'><label for='mqtt_user'>MQTT User:</label><input type='text' id='mqtt_user' name='mqtt_user' value='" + mqtt_user + "' required></div>";
