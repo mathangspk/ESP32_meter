@@ -35,6 +35,8 @@ export function DeviceDetail({ device, user, onClose, onDeviceUpdated }: { devic
   const [controlLoading, setControlLoading] = useState(false);
   const [controlMessage, setControlMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  const filteredReleases = releases.filter((rel: any) => !device.boardType || rel.boardType === device.boardType);
+
   useEffect(() => {
     setEditName(device.displayName ?? device.serialNumber);
     setIsEditingName(false);
@@ -105,7 +107,10 @@ export function DeviceDetail({ device, user, onClose, onDeviceUpdated }: { devic
     api.releases()
       .then((data) => {
         setReleases(data);
-        if (data.length > 0) setSelectedVersion(data[0].version);
+        const compatible = data.filter((rel: any) => !device.boardType || rel.boardType === device.boardType);
+        if (compatible.length > 0) {
+          setSelectedVersion(compatible[0].version);
+        }
       })
       .catch(console.error);
   };
@@ -465,12 +470,12 @@ export function DeviceDetail({ device, user, onClose, onDeviceUpdated }: { devic
                     value={selectedVersion}
                     onChange={(e) => setSelectedVersion(e.target.value)}
                     style={{ width: "200px" }}
-                    disabled={controlLoading || releases.length === 0}
+                    disabled={controlLoading || filteredReleases.length === 0}
                   >
-                    {releases.length === 0 ? (
+                    {filteredReleases.length === 0 ? (
                       <option>Không tìm thấy firmware nào</option>
                     ) : (
-                      releases.map((rel) => (
+                      filteredReleases.map((rel) => (
                         <option key={rel.version} value={rel.version}>
                           {rel.version} ({rel.boardType})
                         </option>

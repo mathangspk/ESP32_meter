@@ -73,6 +73,7 @@ export type Device = {
   lastFirmwareVersion?: string;
   lastSeenAt?: string;
   ipAddress?: string;
+  boardType?: string;
   state?: {
     isOffline: boolean;
     lastVoltage: number;

@@ -4,6 +4,7 @@
 - **Firmware (ESP32 & ESP8266)**: Bổ sung 6 ô cấu hình tuỳ biến vào cổng Captive Portal (`192.168.4.1`) lúc kết nối WiFi để nhập các thông số MQTT (Broker IP, Port, Username, Password) và mã định danh thiết bị (Device ID, Serial Number) trực tiếp từ smartphone.
 - **Backend API**: Cập nhật `DeviceRecord` và module `telemetry.repo.ts` để tự động tách và lưu trữ địa chỉ IP nội bộ của thiết bị từ telemetry vào bộ cơ sở dữ liệu `devices`.
 - **Frontend Dashboard**: Cập nhật giao diện hiển thị thêm cột địa chỉ IP nội bộ dưới dạng link click trực tiếp trên bảng danh sách thiết bị ở cả trang **Dashboard** và **Devices**, hỗ trợ truy cập cấu hình nhanh mà không cần mở popup chi tiết hoặc dùng máy tính.
+- **Frontend Dropdown Filtering**: Lọc danh sách firmware trong ô chọn cập nhật OTA ở tab điều khiển, chỉ hiển thị các bản firmware tương thích với loại bo mạch của thiết bị (ESP32 chỉ hiện ESP32, ESP8266 chỉ hiện ESP8266), khắc phục lỗi trùng lặp và xung đột phiên bản khi kích hoạt OTA.
 - **Firmware Update v1.0.2**: Biên dịch thành công firmware `1.0.2` cho cả ESP32 và ESP8266, tải lên host firmware trên VPS, đăng ký các bản phát hành mới trong DB, và kích hoạt OTA nâng cấp cho các thiết bị đang chạy.
 
 ## Current System State
