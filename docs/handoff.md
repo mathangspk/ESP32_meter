@@ -11,6 +11,7 @@ System stable and fully deployed. Web dashboard maturing toward end-user access.
 - **OTA Dropdown Filtering**: Filtered the select version dropdown in the Controls tab to only display releases compatible with the current device's board type (ESP32 for ESP32, ESP8266 for ESP8266), resolving version selection conflict.
 - **Backend OTA Request Validation**: Made `actorUserId` optional in the Zod parser schema on `/devices/:deviceId/ota`, resolving the Zod 400 Bad Request error triggered by the dashboard UI.
 - **Firmware Version v1.0.2 Build**: Successfully compiled ESP32 and ESP8266 firmwares with `FIRMWARE_VERSION="1.0.2"`.
+- **Local Flash via COM3**: Successfully uploaded the firmware v1.0.2 locally over USB serial COM3 to the connected physical ESP32 device.
 - **VPS Binary Deployment**: Copied `esp32-meter-1.0.2.bin` and `esp8266-meter-1.0.2.bin` to `/home/tma_agi/esp32_loss_power_deploy/firmware-host/` on the VPS.
 - **OTA Job Triggered**: Registered the new firmware releases in MongoDB and triggered OTA updates for active devices (`7B34E3EC` & `004A936C`). ESP32 device confirmed transition to `received` -> `downloading`.
 

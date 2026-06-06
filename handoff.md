@@ -6,7 +6,7 @@
 - **Backend Schema Hardening**: Cập nhật `otaReleaseRequestSchema` cho phép `actorUserId` là tuỳ chọn (`optional`), khắc phục lỗi Zod parse error (400 Bad Request) khi người dùng kích hoạt OTA từ giao diện web dashboard.
 - **Frontend Dashboard**: Cập nhật giao diện hiển thị thêm cột địa chỉ IP nội bộ dưới dạng link click trực tiếp trên bảng danh sách thiết bị ở cả trang **Dashboard** và **Devices**, hỗ trợ truy cập cấu hình nhanh mà không cần mở popup chi tiết hoặc dùng máy tính.
 - **Frontend Dropdown Filtering**: Lọc danh sách firmware trong ô chọn cập nhật OTA ở tab điều khiển, chỉ hiển thị các bản firmware tương thích với loại bo mạch của thiết bị (ESP32 chỉ hiện ESP32, ESP8266 chỉ hiện ESP8266), khắc phục lỗi trùng lặp và xung đột phiên bản khi kích hoạt OTA.
-- **Firmware Update v1.0.2**: Biên dịch thành công firmware `1.0.2` cho cả ESP32 và ESP8266, tải lên host firmware trên VPS, đăng ký các bản phát hành mới trong DB, và kích hoạt OTA nâng cấp cho các thiết bị đang chạy.
+- **Firmware Update v1.0.2 & Local Flashing**: Biên dịch thành công firmware `1.0.2` cho cả ESP32 và ESP8266, tải lên host firmware trên VPS, đăng ký các bản phát hành mới trong DB. Đồng thời nạp trực tiếp thành công bản firmware `1.0.2` này qua cổng USB COM3 cho thiết bị ESP32 đang được kết nối với laptop của người dùng.
 
 ## Current System State
 - **Firmware**: Biên dịch thành công cho cả 2 nền tảng:
