@@ -1,0 +1,21 @@
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left;
+  padding: 14px 16px;
+  color: var(--muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 13px; transition: var(--transition); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255, 255, 255, 0.015); }
+
+/* Responsive Table Wrapper */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
