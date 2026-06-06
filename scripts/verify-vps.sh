@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "== compose ps =="
-ssh "$SSH_ALIAS" "cd '$DEPLOY_DIR' && DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' docker-compose -f '$REMOTE_COMPOSE_FILE' ps"
+ssh "$SSH_ALIAS" "cd '$DEPLOY_DIR' && DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' docker compose -f '$REMOTE_COMPOSE_FILE' ps"
 
 echo
 echo "== healthz =="

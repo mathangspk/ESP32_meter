@@ -96,6 +96,6 @@ echo "Activating tracked VPS compose file..."
 ssh "$SSH_ALIAS" "cp '$DEPLOY_DIR/$LOCAL_COMPOSE_FILE' '$DEPLOY_DIR/$REMOTE_COMPOSE_FILE'"
 
 echo "Deploying stack on VPS..."
-ssh "$SSH_ALIAS" "cd '$DEPLOY_DIR' && DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' docker-compose -f '$REMOTE_COMPOSE_FILE' up -d --build"
+ssh "$SSH_ALIAS" "cd '$DEPLOY_DIR' && DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' docker compose -f '$REMOTE_COMPOSE_FILE' up -d --build"
 
 echo "Deployment finished. Next step: scripts/verify-vps.sh"
