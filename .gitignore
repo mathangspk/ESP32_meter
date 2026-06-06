@@ -9,5 +9,10 @@ backend/.env.local
 assistant-bot/node_modules
 assistant-bot/dist
 assistant-bot/.env.local
-.env.prod
 infra/mosquitto/passwd
+infra/mosquitto/passwd.user
+do_ssh_key
+do_ssh_key.pub
+compile_commands.json
+.claude/
+.env.prod

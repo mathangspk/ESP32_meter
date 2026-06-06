@@ -32,6 +32,14 @@ export const api = {
     req<void>("PUT", `/dashboard/users/${userId}`, data),
   deleteUser: (userId: string) => req<void>("DELETE", `/dashboard/users/${userId}`),
   tenants: () => req<Tenant[]>("GET", "/dashboard/tenants"),
+  sites: (tenantId?: string) => req<Site[]>("GET", `/dashboard/sites${tenantId ? `?tenantId=${tenantId}` : ""}`),
+  claimDevice: (data: {
+    serialNumber: string;
+    tenantId: string;
+    siteId: string;
+    ownerUserId: string;
+    displayName: string;
+  }) => req<Device>("POST", "/devices/claim", data),
   peakDay: (serial: string, options?: { preset?: string; startDate?: string; endDate?: string }) => {
     const params = new URLSearchParams();
     if (options?.preset) params.append("preset", options.preset);
@@ -95,6 +103,14 @@ export type Tenant = {
   tenantId: string;
   name: string;
   status: string;
+  createdAt: string;
+};
+
+export type Site = {
+  siteId: string;
+  tenantId: string;
+  name: string;
+  timezone: string;
   createdAt: string;
 };
 

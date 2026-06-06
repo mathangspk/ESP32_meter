@@ -1,15 +1,20 @@
-# Project Handoff - Firmware IP & Version Update
+# Project Handoff - Claim Device Web Dashboard Integration
 
 ## Summary of Changes
-- **Firmware Version v1.0.2 Configuration**: Added `-D FIRMWARE_VERSION=\"1.0.2\"` build flags in [platformio.ini](file:///c:/local/opencode/iot/esp32_loss_power/platformio.ini) for both `esp32doit-devkit-v1` and `nodemcuv2` targets, ensuring devices report their version correctly as `1.0.2` on the dashboard.
-- **Upload Speed Adjustment**: Set `upload_speed = 115200` in `platformio.ini` for stable connection handshake on Windows machines.
-- **Flashing Handover**: Compiled the firmware successfully and handed over the manual flashing commands to the user to execute directly via their terminal for perfect physical button synchronization.
+- **Backend API Scoped Sites**: Added `GET /dashboard/sites` in [dashboard.ts](file:///c:/local/opencode/iot/esp32_loss_power/backend/src/routes/dashboard.ts) allowing admins to query all sites (optionally filtered by `tenantId`) and regular users to list sites only within their default tenant.
+- **Frontend API Client Update**: Updated [api.ts](file:///c:/local/opencode/iot/esp32_loss_power/frontend/src/api.ts) with `Site` type definitions and the wrapper methods `api.sites` and `api.claimDevice` calling `/dashboard/sites` and `/devices/claim` respectively.
+- **Claim Device UI Implementation**: Added the "🔌 Claim Thiết bị" button to the device page header and created the `ClaimDeviceModal` component in [Devices.tsx](file:///c:/local/opencode/iot/esp32_loss_power/frontend/src/pages/Devices.tsx):
+  - **Regular Users**: Input fields for serial number and display name, with a site dropdown selector limited to their tenant.
+  - **Platform Admins**: Complete selector fields for target Tenant, Site, and Owner User to map any device to any user/site.
+  - Modal handles dynamic fetching, validations, loading/disabled states, error notifications, and immediate list updates on success.
+- **Script Path Migration**: Fixed default deploy/verify directories to point to `/home/technician/...` instead of `/home/tma_agi/...` in [deploy-vps.sh](file:///c:/local/opencode/iot/esp32_loss_power/scripts/deploy-vps.sh) and [verify-vps.sh](file:///c:/local/opencode/iot/esp32_loss_power/scripts/verify-vps.sh).
 
 ## Current System State
-- Firmware version `1.0.2` has been successfully compiled locally.
-- `platformio.ini` configuration is committed with stable upload settings and version flags.
+- Frontend and backend builds compile with zero errors locally (`tsc` validation passed).
+- All changes are fully implemented and integrated.
+- The claim API `/devices/claim` is verified on the backend, and is now wired to the UI.
 
 ## Next Steps
-- User to run the flashing command from their terminal and hold the BOOT button to upload the firmware.
-- Remove the physical jumper wire from `D0` to `GND`.
-- Reconnect the PZEM sensor wires to the ESP32 and monitor the web dashboard at `http://167.71.207.5:8080` to verify the online status showing version `1.0.2`.
+- Commit and push changes to the GitHub repository to trigger the automatic Docker image build and push (GHCR.io) workflows for both backend and frontend.
+- Run the VPS deployment script or pull latest images and restart the containers on the VPS (`167.71.207.5`).
+- Perform manual verification on the live dashboard.

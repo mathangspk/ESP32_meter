@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { api, type Device, type TelemetryRow, type PeakDaySummary, type HourlyBreakdown, type User } from "../api";
+import { api, type Device, type TelemetryRow, type PeakDaySummary, type HourlyBreakdown, type User, type Tenant, type Site } from "../api";
 
 export function DeviceDetail({ device, user, onClose, onDeviceUpdated }: { device: Device; user?: User; onClose: () => void; onDeviceUpdated?: (updated: Device) => void }) {
   const [telemetry, setTelemetry] = useState<TelemetryRow[]>([]);
@@ -506,9 +506,240 @@ export function DeviceDetail({ device, user, onClose, onDeviceUpdated }: { devic
   );
 }
 
+export function ClaimDeviceModal({
+  user,
+  onClose,
+  onDeviceClaimed,
+}: {
+  user?: User;
+  onClose: () => void;
+  onDeviceClaimed: (device: Device) => void;
+}) {
+  const [serialNumber, setSerialNumber] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [sites, setSites] = useState<Site[]>([]);
+  const [selectedSiteId, setSelectedSiteId] = useState("");
+
+  // Admin only states
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState(user?.defaultTenantId ?? "");
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedOwnerUserId, setSelectedOwnerUserId] = useState(user?.userId ?? "");
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isAdmin = user?.systemRole === "platform_admin";
+
+  useEffect(() => {
+    if (isAdmin) {
+      api.tenants().then(setTenants).catch(console.error);
+      api.users().then(setUsers).catch(console.error);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    const tId = isAdmin ? selectedTenantId : user?.defaultTenantId;
+    if (tId) {
+      api.sites(tId)
+        .then((data) => {
+          setSites(data);
+          if (data.length > 0) {
+            setSelectedSiteId(data[0].siteId);
+          } else {
+            setSelectedSiteId("");
+          }
+        })
+        .catch(console.error);
+    }
+  }, [selectedTenantId, isAdmin, user?.defaultTenantId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serialNumber.trim() || !displayName.trim() || !selectedSiteId) {
+      setError("Vui lòng điền đầy đủ thông tin.");
+      return;
+    }
+
+    const tId = isAdmin ? selectedTenantId : user?.defaultTenantId;
+    const ownerId = isAdmin ? selectedOwnerUserId : user?.userId;
+
+    if (!tId || !ownerId) {
+      setError("Không tìm thấy thông tin Tenant hoặc Người sở hữu.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const device = await api.claimDevice({
+        serialNumber: serialNumber.trim(),
+        tenantId: tId,
+        siteId: selectedSiteId,
+        ownerUserId: ownerId,
+        displayName: displayName.trim(),
+      });
+      onDeviceClaimed(device);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Claim thiết bị thất bại.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ width: 500 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div className="modal-title" style={{ margin: 0 }}>🔌 Claim Thiết bị mới</div>
+          <button className="btn-ghost" onClick={onClose} disabled={loading}>✕</button>
+        </div>
+
+        {error && (
+          <div className="alert-error" style={{ marginBottom: 16, padding: "10px 12px", borderRadius: 6, fontSize: 13 }}>
+            ⚠️ {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)" }}>SỐ SERIAL THIẾT BỊ</label>
+            <input
+              type="text"
+              placeholder="Ví dụ: 004A936C"
+              value={serialNumber}
+              onChange={(e) => setSerialNumber(e.target.value)}
+              disabled={loading}
+              required
+              style={{
+                padding: "8px 12px",
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                color: "var(--text)",
+                outline: "none"
+              }}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)" }}>TÊN THIẾT BỊ (DISPLAY NAME)</label>
+            <input
+              type="text"
+              placeholder="Ví dụ: Phòng Server, Tầng 1..."
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              disabled={loading}
+              required
+              style={{
+                padding: "8px 12px",
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                color: "var(--text)",
+                outline: "none"
+              }}
+            />
+          </div>
+
+          {isAdmin && (
+            <>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)" }}>CHỌN TENANT (ADMIN ONLY)</label>
+                <select
+                  value={selectedTenantId}
+                  onChange={(e) => setSelectedTenantId(e.target.value)}
+                  disabled={loading}
+                  style={{
+                    padding: "8px 12px",
+                    background: "rgba(0,0,0,0.2)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    color: "var(--text)",
+                    outline: "none"
+                  }}
+                >
+                  <option value="">-- Chọn Tenant --</option>
+                  {tenants.map((t) => (
+                    <option key={t.tenantId} value={t.tenantId}>
+                      {t.name} ({t.tenantId})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)" }}>CHỌN NGƯỜI SỞ HỮU (ADMIN ONLY)</label>
+                <select
+                  value={selectedOwnerUserId}
+                  onChange={(e) => setSelectedOwnerUserId(e.target.value)}
+                  disabled={loading}
+                  style={{
+                    padding: "8px 12px",
+                    background: "rgba(0,0,0,0.2)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    color: "var(--text)",
+                    outline: "none"
+                  }}
+                >
+                  <option value="">-- Chọn Người sở hữu --</option>
+                  {users.map((u) => (
+                    <option key={u.userId} value={u.userId}>
+                      {u.displayName ?? u.username} ({u.userId})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)" }}>VỊ TRÍ LẮP ĐẶT (SITE)</label>
+            <select
+              value={selectedSiteId}
+              onChange={(e) => setSelectedSiteId(e.target.value)}
+              disabled={loading || sites.length === 0}
+              style={{
+                padding: "8px 12px",
+                background: "rgba(0,0,0,0.2)",
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                color: "var(--text)",
+                outline: "none"
+              }}
+            >
+              {sites.length === 0 ? (
+                <option value="">-- Không có Vị trí/Site nào --</option>
+              ) : (
+                sites.map((s) => (
+                  <option key={s.siteId} value={s.siteId}>
+                    {s.name} ({s.siteId})
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          <div style={{ display: "flex", gap: 12, marginTop: 10, justifyContent: "flex-end" }}>
+            <button type="button" className="btn-ghost" onClick={onClose} disabled={loading}>
+              Hủy
+            </button>
+            <button type="submit" className="btn-primary" disabled={loading || !selectedSiteId}>
+              {loading ? "Đang xử lý..." : "Claim Thiết bị"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function Devices({ user }: { user?: User }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [selected, setSelected] = useState<Device | null>(null);
+  const [showClaimModal, setShowClaimModal] = useState(false);
 
   // Search & Filter state
   const [search, setSearch] = useState("");
@@ -535,13 +766,16 @@ export default function Devices({ user }: { user?: User }) {
 
   return (
     <>
-      <div className="page-header">
+      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <h1 className="page-title">Thiết bị</h1>
           <span style={{ color: "var(--muted)", fontSize: 13 }}>
             Tìm thấy {filteredDevices.length} thiết bị ({devices.length} tổng số)
           </span>
         </div>
+        <button className="btn-primary" onClick={() => setShowClaimModal(true)}>
+          🔌 Claim Thiết bị
+        </button>
       </div>
 
       <div className="filters-bar">
@@ -625,6 +859,17 @@ export default function Devices({ user }: { user?: User }) {
             setDevices((prev) =>
               prev.map((d) => (d.deviceId === updated.deviceId ? { ...d, displayName: updated.displayName } : d))
             );
+          }}
+        />
+      )}
+
+      {showClaimModal && (
+        <ClaimDeviceModal
+          user={user}
+          onClose={() => setShowClaimModal(false)}
+          onDeviceClaimed={(newDevice) => {
+            setDevices((prev) => [newDevice, ...prev]);
+            setShowClaimModal(false);
           }}
         />
       )}

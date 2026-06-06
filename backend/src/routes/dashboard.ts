@@ -80,3 +80,24 @@ dashboardRouter.get("/tenants", authMiddleware, requirePlatformAdmin, async (_re
   const tenants = await mongoService.getTenants(200);
   res.json(tenants);
 });
+
+dashboardRouter.get("/sites", authMiddleware, async (req, res) => {
+  const { systemRole, tenantId } = (req as typeof req & { user: JwtPayload }).user;
+  if (systemRole === "platform_admin") {
+    const targetTenantId = req.query.tenantId as string;
+    if (targetTenantId) {
+      const sites = await mongoService.getSitesForTenant(targetTenantId);
+      res.json(sites);
+    } else {
+      const sites = await mongoService.getSites(200);
+      res.json(sites);
+    }
+  } else {
+    if (!tenantId) {
+      res.json([]);
+      return;
+    }
+    const sites = await mongoService.getSitesForTenant(tenantId);
+    res.json(sites);
+  }
+});

@@ -3,8 +3,8 @@
 set -euo pipefail
 
 SSH_ALIAS="${SSH_ALIAS:-vps-prod}"
-DEPLOY_DIR="${DEPLOY_DIR:-/home/tma_agi/esp32_loss_power_deploy}"
-REMOTE_DOCKER_CONFIG="${REMOTE_DOCKER_CONFIG:-/home/tma_agi/empty-docker-config}"
+DEPLOY_DIR="${DEPLOY_DIR:-/home/technician/esp32_loss_power_deploy}"
+REMOTE_DOCKER_CONFIG="${REMOTE_DOCKER_CONFIG:-/home/technician/empty-docker-config}"
 LOCAL_COMPOSE_FILE="${LOCAL_COMPOSE_FILE:-docker-compose.vps.yml}"
 REMOTE_COMPOSE_FILE="${REMOTE_COMPOSE_FILE:-docker-compose.deploy.yml}"
 
@@ -23,8 +23,8 @@ Options:
 
 Environment overrides:
   SSH_ALIAS             SSH alias, default: vps-prod
-  DEPLOY_DIR            Remote deploy dir, default: /home/tma_agi/esp32_loss_power_deploy
-  REMOTE_DOCKER_CONFIG  Remote Docker config dir, default: /home/tma_agi/empty-docker-config
+  DEPLOY_DIR            Remote deploy dir, default: /home/technician/esp32_loss_power_deploy
+  REMOTE_DOCKER_CONFIG  Remote Docker config dir, default: /home/technician/empty-docker-config
   LOCAL_COMPOSE_FILE    Local tracked VPS compose file, default: docker-compose.vps.yml
   REMOTE_COMPOSE_FILE   Remote active compose file name, default: docker-compose.deploy.yml
 EOF

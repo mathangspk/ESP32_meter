@@ -4,6 +4,31 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Web Dashboard Claim Device Feature Milestone (2026-06-06)
+
+### What Was Confirmed & Verified
+- **Backend API Scoped Sites**: Added role-based `GET /dashboard/sites` in `routes/dashboard.ts` (admins can query all sites or filter by `tenantId`, regular users query sites only inside their own tenant).
+- **Frontend API Client Update**: Integrated `Site` type and wrapper functions `api.sites` and `api.claimDevice` in `frontend/src/api.ts`.
+- **Claim Device UI Component**: Created `ClaimDeviceModal` in `frontend/src/pages/Devices.tsx` and linked it via a "🔌 Claim Thiết bị" button. Handles regular user forms (scoped to their tenant) and admin forms (unscoped tenant/site/owner user mappings).
+- **Clean Local Builds**: Verified local compilation of frontend and backend via typescript compilers. Both built with zero errors.
+- **Script Path Migration**: Fixed default deploy/verify directories to point to `/home/technician/...` instead of `/home/tma_agi/...` in `deploy-vps.sh` and `verify-vps.sh`.
+
+### What Changed
+- **`backend/src/routes/dashboard.ts`**: Added `GET /sites` endpoint with role-based scoping checks.
+- **`frontend/src/api.ts`**: Added `Site` type, `api.sites()`, and `api.claimDevice()` methods.
+- **`frontend/src/pages/Devices.tsx`**: Added "Claim Thiết bị" button to page header and fully implemented `ClaimDeviceModal` component.
+- **`scripts/deploy-vps.sh`**: Changed default path defaults from `tma_agi` to `technician`.
+- **`scripts/verify-vps.sh`**: Changed default path defaults from `tma_agi` to `technician`.
+- **`handoff.md`**: Updated the root handoff description.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Push code to main to trigger GitHub Actions Docker build, then run pull & restart on the VPS to deploy.
+
+---
+
 ## Firmware Fallback IP Update Milestone (2026-06-06)
 
 ### What Was Confirmed & Verified
