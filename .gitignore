@@ -16,3 +16,6 @@ do_ssh_key.pub
 compile_commands.json
 .claude/
 .env.prod
+frontend/node_modules
+frontend/dist
+frontend/package-lock.json

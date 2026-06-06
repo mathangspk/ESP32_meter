@@ -1,52 +1,26 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { api, type User } from "./api";
+import { Sidebar } from "./components/Sidebar";
 import Dashboard from "./pages/dashboard";
 import Devices from "./pages/devices";
 import Login from "./pages/Login";
 import Users from "./pages/Users";
 
-function Sidebar({ user, onLogout }: { user: User; onLogout: () => void }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const links = [
-    { path: "/", label: "Dashboard", icon: "⊞" },
-    { path: "/devices", label: "Devices", icon: "⚡" },
-    ...(user.systemRole === "platform_admin" ? [{ path: "/users", label: "Users", icon: "👥" }] : []),
-  ];
-  return (
-    <nav className="sidebar">
-      <div className="sidebar-logo">⚡ Meter Admin</div>
-      {links.map((l) => (
-        <div
-          key={l.path}
-          className={`sidebar-link${location.pathname === l.path ? " active" : ""}`}
-          onClick={() => navigate(l.path)}
-        >
-          <span>{l.icon}</span>
-          <span>{l.label}</span>
-        </div>
-      ))}
-      <div style={{ flex: 1 }} />
-      <div style={{ padding: "16px 20px", borderTop: "1px solid var(--border)" }}>
-        <div style={{ fontSize: 13, marginBottom: 8, color: "var(--muted)" }}>
-          {user.displayName ?? user.username}
-          {user.systemRole === "platform_admin" && (
-            <span className="badge badge-blue" style={{ marginLeft: 6 }}>Admin</span>
-          )}
-        </div>
-        <button className="btn-ghost" style={{ width: "100%", fontSize: 13 }} onClick={onLogout}>
-          Logout
-        </button>
-      </div>
-    </nav>
-  );
-}
-
 function AuthedApp({ user, onLogout }: { user: User; onLogout: () => void }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   return (
     <>
-      <Sidebar user={user} onLogout={onLogout} />
+      <div className="mobile-header">
+        <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
+          ☰
+        </button>
+        <div className="sidebar-logo" style={{ padding: 0, fontSize: 18, marginBottom: 0 }}>
+          ⚡ Meter Admin
+        </div>
+      </div>
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+      <Sidebar user={user} onLogout={onLogout} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="main-content">
         <Routes>
           <Route path="/" element={<Dashboard user={user} />} />

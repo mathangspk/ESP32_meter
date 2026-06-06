@@ -43,25 +43,27 @@ export function DevicesPage({ user }: { user?: User }) {
       </div>
 
       <div className="card">
-        <table>
-          <thead>
-            <tr><th>Tên thiết bị</th><th>Số Serial</th><th>Địa chỉ IP</th><th>Trạng thái</th><th>Firmware</th><th>Điện áp</th><th>Công suất</th><th>Lần cuối thấy</th></tr>
-          </thead>
-          <tbody>
-            {filtered.map((d) => (
-              <tr key={d.deviceId} style={{ cursor: "pointer" }} onClick={() => setSelected(d)}>
-                <td style={{ fontWeight: 500 }}>{d.displayName ?? d.serialNumber}</td>
-                <td style={{ color: "var(--muted)", fontFamily: "monospace", fontSize: 12 }}>{d.serialNumber}</td>
-                <td>{d.ipAddress ? <a href={`http://${d.ipAddress}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "var(--accent)", textDecoration: "underline" }}>{d.ipAddress}</a> : "—"}</td>
-                <td><span className={`badge badge-${d.state?.isOffline === false ? "green" : "red"}`}>● {d.state?.isOffline === false ? "Online" : "Offline"}</span></td>
-                <td style={{ color: "var(--muted)" }}>{d.lastFirmwareVersion ?? "—"}</td>
-                <td>{d.state?.lastVoltage ? `${d.state.lastVoltage.toFixed(1)} V` : "— V"}</td>
-                <td>{d.state?.lastPower ? `${d.state.lastPower.toFixed(0)} W` : "— W"}</td>
-                <td style={{ color: "var(--muted)", fontSize: 12 }}>{d.state?.lastSeenAt ? new Date(d.state.lastSeenAt).toLocaleString() : "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-responsive">
+          <table>
+            <thead>
+              <tr><th>Tên thiết bị</th><th>Số Serial</th><th>Địa chỉ IP</th><th>Trạng thái</th><th>Firmware</th><th>Điện áp</th><th>Công suất</th><th>Lần cuối thấy</th></tr>
+            </thead>
+            <tbody>
+              {filtered.map((d) => (
+                <tr key={d.deviceId} style={{ cursor: "pointer" }} onClick={() => setSelected(d)}>
+                  <td style={{ fontWeight: 500 }}>{d.displayName ?? d.serialNumber}</td>
+                  <td style={{ color: "var(--muted)", fontFamily: "monospace", fontSize: 12 }}>{d.serialNumber}</td>
+                  <td>{d.ipAddress ? <a href={`http://${d.ipAddress}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "var(--accent)", textDecoration: "underline" }}>{d.ipAddress}</a> : "—"}</td>
+                  <td><span className={`badge badge-${d.state?.isOffline === false ? "green" : "red"}`}>● {d.state?.isOffline === false ? "Online" : "Offline"}</span></td>
+                  <td style={{ color: "var(--muted)" }}>{d.lastFirmwareVersion ?? "—"}</td>
+                  <td>{d.state?.lastVoltage ? `${d.state.lastVoltage.toFixed(1)} V` : "— V"}</td>
+                  <td>{d.state?.lastPower ? `${d.state.lastPower.toFixed(0)} W` : "— W"}</td>
+                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{d.state?.lastSeenAt ? new Date(d.state.lastSeenAt).toLocaleString() : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {selected && (

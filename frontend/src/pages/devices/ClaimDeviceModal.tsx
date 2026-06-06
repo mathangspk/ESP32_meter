@@ -49,7 +49,7 @@ export function ClaimDeviceModal({ user, onClose, onDeviceClaimed }: { user?: Us
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ width: 500 }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 500, maxWidth: "95vw" }} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalHeader}>
           <div className="modal-title" style={{ margin: 0 }}>🔌 Claim Thiết bị mới</div>
           <button className="btn-ghost" onClick={onClose} disabled={loading}>✕</button>

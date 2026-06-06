@@ -45,7 +45,7 @@ export function DashboardStatsCards({
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ color: "var(--success)", animation: "pulse 2s infinite" }}>●</span> Chỉ số Live Fleet (Các thiết bị online)
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+          <div className="live-fleet-grid">
             <div style={{ padding: "12px", background: "rgba(255,255,255,0.02)", borderRadius: 8, border: "1px solid var(--border)" }}>
               <div style={{ color: "var(--muted)", fontSize: 10, textTransform: "uppercase", marginBottom: 4, letterSpacing: "0.05em" }}>Tổng Công Suất</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: "var(--accent)" }}>

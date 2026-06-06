@@ -37,7 +37,7 @@ export function DeviceDetailModal({ device, user, onClose, onDeviceUpdated }: { 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ width: 780 }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 780, maxWidth: "95vw" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, minHeight: 38 }}>
           {isEditingName ? (
             <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, marginRight: 16 }}>

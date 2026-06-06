@@ -4,6 +4,31 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Mobile & Tablet Responsive Layout Improvements Milestone (2026-06-06)
+
+### What Was Confirmed & Verified
+- **Mobile Collapsible Sidebar**: Implemented slide-out sidebar hidden on screens <= 768px with a backdrop overlay and top hamburger bar toggle.
+- **Scrollable Tables**: Added horizontal scroll wrapping for all tables to prevent horizontal viewport clipping on mobile.
+- **Stacked Layout Grids**: Stats grids and user forms automatically stack vertically on small viewports.
+- **Vite Production Build**: Verified that the React frontend builds successfully under production settings with zero errors.
+
+### What Changed
+- **`frontend/src/index.css`**: Appended responsive classes (`.table-responsive`, `.live-fleet-grid`, `.mobile-header`, `.sidebar-overlay`) and media queries.
+- **`frontend/src/App.tsx`**: Integrated sidebar toggle state and top menu toggling.
+- **`frontend/src/components/Sidebar.tsx`** [NEW]: Extracted the sidebar component for modularity (respecting 100-line limit).
+- **`frontend/src/pages/devices/ClaimDeviceModal.tsx`** & **`DeviceDetailModal.tsx`**: Handled dynamic max-widths.
+- **`frontend/src/pages/devices/DevicesPage.tsx`**, **`DashboardDeviceTable.tsx`**, and **`Users.tsx`**: Added scroll containers to all tables.
+- **`frontend/src/pages/dashboard/DashboardStatsCards.tsx`**: Updated grid columns mapping.
+- **`handoff.md`**: Updated the root handoff description.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Commit and push changes to origin main to build and deploy the updated frontend Docker image on the VPS.
+
+---
+
 ## Codebase 100-Line Limit Refactoring Milestone (2026-06-06)
 
 ### What Was Confirmed & Verified
