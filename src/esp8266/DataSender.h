@@ -46,6 +46,8 @@ private:
     String getTimestamp();
     String createPayload(String serial_number, float voltage, float current, float power, float energy, String IPAddress);
     void callback(char *topic, byte *payload, unsigned int length);
+    void handleControlCommand(byte *payload, unsigned int length);
+    void handleOtaCommand(byte *payload, unsigned int length);
     void publishOtaStatus(const String &jobId, const String &status, const String &message, const String &targetVersion);
     static void otaTaskEntry(void *parameter);
 

@@ -1,5 +1,4 @@
-import { backendClient } from "./backend-client";
-import { Membership } from "./backend-client";
+import { backendClient, Membership } from "./backend-client";
 
 export function previewText(value: string, maxLength = 240) {
   const normalized = value.replace(/\s+/g, " ").trim();
@@ -7,116 +6,74 @@ export function previewText(value: string, maxLength = 240) {
 }
 
 export function formatMemberships(memberships: Membership[]): string {
-  return memberships
-    .map((membership, index) => `${index + 1}. ${membership.tenantName ?? membership.tenantId} (${membership.tenantId}, ${membership.role})`)
-    .join("\n");
+  return memberships.map((m, i) => `${i + 1}. ${m.tenantName ?? m.tenantId} (${m.tenantId}, ${m.role})`).join("\n");
 }
 
-export function formatFleetSummary(summary: Awaited<ReturnType<typeof backendClient.getFleetSummary>>): string {
+export function formatFleetSummary(s: Awaited<ReturnType<typeof backendClient.getFleetSummary>>): string {
   return [
     "Fleet summary:",
-    `Devices: ${summary.totals.devices}`,
-    `Online devices: ${summary.totals.onlineDevices}`,
-    `Claimed devices: ${summary.totals.claimedDevices}`,
-    `Unclaimed devices: ${summary.totals.unclaimedDevices}`,
-    `Online unclaimed devices: ${summary.totals.onlineUnclaimedDevices}`,
-    `Users: ${summary.totals.users}`,
-    `Active users: ${summary.totals.activeUsers}`,
-    `Tenants: ${summary.totals.tenants}`,
-    `Sites: ${summary.totals.sites}`,
+    `Devices: ${s.totals.devices} | Online: ${s.totals.onlineDevices} | Claimed: ${s.totals.claimedDevices} | Unclaimed: ${s.totals.unclaimedDevices}`,
+    `Online unclaimed: ${s.totals.onlineUnclaimedDevices} | Users: ${s.totals.users} | Active users: ${s.totals.activeUsers}`,
+    `Tenants: ${s.totals.tenants} | Sites: ${s.totals.sites}`,
   ].join("\n");
 }
 
-export function formatUserSummary(summary: Awaited<ReturnType<typeof backendClient.getUserSummary>>): string {
+export function formatUserSummary(s: Awaited<ReturnType<typeof backendClient.getUserSummary>>): string {
   return [
     "User summary:",
-    `Users: ${summary.totals.users}`,
-    `Active users: ${summary.totals.activeUsers}`,
-    `Invited users: ${summary.totals.invitedUsers}`,
-    `Suspended users: ${summary.totals.suspendedUsers}`,
+    `Users: ${s.totals.users} | Active: ${s.totals.activeUsers} | Invited: ${s.totals.invitedUsers} | Suspended: ${s.totals.suspendedUsers}`,
   ].join("\n");
 }
 
 export function formatDeviceList(prefix: string, devices: Awaited<ReturnType<typeof backendClient.getDevicesForTenant>>): string {
-  if (devices.length === 0) {
-    return `${prefix}: none`;
-  }
-
+  if (devices.length === 0) return `${prefix}: none`;
   return [
     `${prefix}:`,
-    ...devices.map((device) => {
-      const label = device.displayName ?? device.serialNumber;
-      const power = device.state?.lastPower ?? 0;
-      return `- ${label} | serial ${device.serialNumber} | lifecycle ${device.lifecycleStatus} | power ${power.toFixed(1)} W`;
-    }),
+    ...devices.map((d) => `- ${d.displayName ?? d.serialNumber} | serial ${d.serialNumber} | lifecycle ${d.lifecycleStatus} | power ${(d.state?.lastPower ?? 0).toFixed(1)} W`),
   ].join("\n");
 }
 
-export function formatSingleDevice(device: Awaited<ReturnType<typeof backendClient.getDeviceHealth>>): string {
-  const lastSeen = device.state?.lastSeenAt ?? "unknown";
-  const voltage = device.state?.lastVoltage ?? 0;
-  const current = device.state?.lastCurrent ?? 0;
-  const power = device.state?.lastPower ?? 0;
+export function formatSingleDevice(d: Awaited<ReturnType<typeof backendClient.getDeviceHealth>>): string {
   return [
-    `Device: ${device.displayName ?? device.serialNumber}`,
-    `Serial: ${device.serialNumber}`,
-    `Device ID: ${device.deviceId}`,
-    `Lifecycle: ${device.lifecycleStatus}`,
-    `Claim status: ${device.claimStatus}`,
-    `Firmware: ${device.lastFirmwareVersion ?? device.state?.lastFirmwareVersion ?? "unknown"}`,
-    `Last seen: ${lastSeen}`,
-    `Voltage: ${voltage.toFixed(1)} V`,
-    `Current: ${current.toFixed(3)} A`,
-    `Power: ${power.toFixed(1)} W`,
+    `Device: ${d.displayName ?? d.serialNumber}`,
+    `Serial: ${d.serialNumber} | ID: ${d.deviceId}`,
+    `Lifecycle: ${d.lifecycleStatus} | Claim: ${d.claimStatus}`,
+    `Firmware: ${d.lastFirmwareVersion ?? d.state?.lastFirmwareVersion ?? "unknown"}`,
+    `Last seen: ${d.state?.lastSeenAt ?? "unknown"}`,
+    `Voltage: ${(d.state?.lastVoltage ?? 0).toFixed(1)} V | Current: ${(d.state?.lastCurrent ?? 0).toFixed(3)} A | Power: ${(d.state?.lastPower ?? 0).toFixed(1)} W`,
   ].join("\n");
 }
 
-export function formatFirmwarePolicy(policy: Awaited<ReturnType<typeof backendClient.getFirmwarePolicy>>): string {
+export function formatFirmwarePolicy(p: Awaited<ReturnType<typeof backendClient.getFirmwarePolicy>>): string {
   return [
-    `Firmware policy for ${policy.serialNumber}:`,
-    `Current: ${policy.currentVersion ?? "unknown"}`,
-    `Support: ${policy.supportStatus}`,
-    `Severity: ${policy.severity}`,
-    `Update available: ${policy.updateAvailable ? "yes" : "no"}`,
-    `Latest compatible: ${policy.latestVersion ?? "unknown"}`,
-    policy.message,
+    `Firmware policy for ${p.serialNumber}:`,
+    `Current: ${p.currentVersion ?? "unknown"} | Support: ${p.supportStatus} | Severity: ${p.severity}`,
+    `Update available: ${p.updateAvailable ? "yes" : "no"} | Latest compatible: ${p.latestVersion ?? "unknown"}`,
+    p.message,
   ].join("\n");
 }
 
 export function formatFleetFirmwarePolicy(policies: Awaited<ReturnType<typeof backendClient.getFleetFirmwarePolicy>>): string {
-  if (policies.length === 0) {
-    return "No firmware policy data found.";
-  }
-
+  if (policies.length === 0) return "No firmware policy data found.";
   return [
     "Fleet firmware policy:",
-    ...policies.map(
-      (policy) =>
-        `- ${policy.serialNumber}: ${policy.currentVersion ?? "unknown"} | ${policy.supportStatus} | ${policy.severity} | latest ${policy.latestVersion ?? "unknown"}`,
-    ),
+    ...policies.map((p) => `- ${p.serialNumber}: ${p.currentVersion ?? "unknown"} | ${p.supportStatus} | ${p.severity} | latest ${p.latestVersion ?? "unknown"}`),
   ].join("\n");
 }
 
 export function getActionLabel(action: "remove" | "reboot" | "factory_reset"): string {
-  if (action === "factory_reset") {
-    return "factory reset";
-  }
-  return action;
+  return action === "factory_reset" ? "factory reset" : action;
 }
 
 export function buildDeviceActionConfirmation(
-  device: Awaited<ReturnType<typeof backendClient.getDeviceHealth>>,
+  d: Awaited<ReturnType<typeof backendClient.getDeviceHealth>>,
   action: "remove" | "reboot" | "factory_reset",
 ) {
   return [
     `Confirm ${getActionLabel(action)}:`,
-    `Device: ${device.displayName ?? device.serialNumber}`,
-    `Serial: ${device.serialNumber}`,
-    `Device ID: ${device.deviceId}`,
+    `Device: ${d.displayName ?? d.serialNumber} | Serial: ${d.serialNumber} | ID: ${d.deviceId}`,
     action === "remove" ? "This will unclaim the device immediately and keep history." : "This will publish a remote command to the device over MQTT.",
     action === "factory_reset" ? "Factory reset will wipe app config and Wi-Fi settings, then reboot into AP/bootstrap mode." : undefined,
     "Send CONFIRM to continue, or CANCEL to stop.",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ].filter(Boolean).join("\n");
 }

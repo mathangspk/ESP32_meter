@@ -2,6 +2,7 @@ import express from "express";
 import { HealthSnapshot } from "./types";
 import { authRouter } from "./routes/auth";
 import { dashboardRouter } from "./routes/dashboard";
+import { usersRouter } from "./routes/users";
 import { devicesRouter } from "./routes/devices";
 import { otaRouter } from "./routes/ota";
 import { adminRouter } from "./routes/admin";
@@ -18,6 +19,7 @@ export function createHttpApp(getHealthSnapshot: () => HealthSnapshot) {
   });
 
   app.use("/auth", authRouter);
+  app.use("/dashboard/users", usersRouter);
   app.use("/dashboard", dashboardRouter);
   app.use("/devices", authMiddleware, devicesRouter);
   app.use("/ota", authMiddleware, requirePlatformAdmin, otaRouter);

@@ -4,6 +4,30 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Codebase 100-Line Limit Refactoring Milestone (2026-06-06)
+
+### What Was Confirmed & Verified
+- **Codebase-Wide 100-Line Limit Refactoring**: Refactored the entire repository including the Backend, Frontend React SPA, Telegram Assistant Bot, and ESP32/ESP8266 firmware C++ source files to ensure every single code file has a maximum of 100 lines.
+- **Flawless Compilations**: Verified that the modified backend, frontend, assistant-bot, and firmware compile successfully with zero TypeScript/linker/compilation errors.
+  - Backend: `npm run typecheck` passed.
+  - Assistant-Bot: `tsc --noEmit` passed.
+  - Frontend: `npm run build` passed.
+  - Firmware: `pio run` passed for both `esp32doit-devkit-v1` and `nodemcuv2` platforms.
+
+### What Changed
+- **`backend/src/`**: Split `analytics.ts` into `analytics.timezone.ts` and `analytics.range.ts`, re-exporting them. Condensed `analytics.energy.ts` and `telemetry.reconcile.ts`. Split `types.analytics.ts` to extract DB records into `types.analytics.db.ts` and fleet types into `types.analytics.fleet.ts`. Condensed `user.mutations.ts` and `user.repo.ts`.
+- **`assistant-bot/src/`**: Split `groq.helpers.ts` to extract NLP logic into `groq.helpers.nlp.ts` and updated imports in `groq.fallback.analytics.ts`. Split `handlers/commands.device.ts` to extract `/add_device` logic into `handlers/commands.device.add.ts`. Condensed `handlers/commands.device.actions.ts`, `handlers/device.firmware.ts`, and `handlers/pending.claim.ts`.
+- **`src/esp32/` & `src/esp8266/`**: Split `include/WebConfigHTML.h` to extract status templates into `include/WebConfigHTMLStatus.h`. Condensed `WebConfig.cpp`, `DataSenderOTA.cpp`, `DataSenderTelemetry.cpp`, and `main_helpers.cpp` in both firmware source directories.
+- **`handoff.md`**: Updated the root handoff description.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Commit and push changes to origin main to backup the modularized codebase.
+
+---
+
 ## Web Dashboard Claim Device & User Tenant Scoping Milestone (2026-06-06)
 
 ### What Was Confirmed & Verified

@@ -29,30 +29,10 @@ namespace
 bool checkOtaUrlAvailable(const String &otaUrl)
 {
     HTTPClient http;
-
-    if (isHttpsUrl(otaUrl))
-    {
-        WiFiClientSecure client;
-        client.setTimeout(OTA_CLIENT_TIMEOUT_MS);
-        if (!beginHttpClient(http, otaUrl, client))
-        {
-            Serial.println("Khong the bat dau ket noi OTA URL.");
-            return false;
-        }
-
-        int httpCode = http.GET();
-        http.end();
-        if (httpCode == 200)
-        {
-            Serial.println("OTA URL khả dụng!");
-            return true;
-        }
-
-        Serial.printf("OTA URL không khả dụng, HTTP code: %d\n", httpCode);
-        return false;
-    }
-
-    WiFiClient client;
+    WiFiClientSecure secureClient;
+    WiFiClient normalClient;
+    WiFiClient &client = isHttpsUrl(otaUrl) ? static_cast<WiFiClient&>(secureClient) : normalClient;
+    
     client.setTimeout(OTA_CLIENT_TIMEOUT_MS);
     if (!beginHttpClient(http, otaUrl, client))
     {
@@ -67,11 +47,9 @@ bool checkOtaUrlAvailable(const String &otaUrl)
         Serial.println("OTA URL khả dụng!");
         return true;
     }
-    else
-    {
-        Serial.printf("OTA URL không khả dụng, HTTP code: %d\n", httpCode);
-        return false;
-    }
+
+    Serial.printf("OTA URL không khả dụng, HTTP code: %d\n", httpCode);
+    return false;
 }
 
 OtaUpdateResult handleOtaUpdate(const String &binUrl, String &message)
@@ -79,20 +57,14 @@ OtaUpdateResult handleOtaUpdate(const String &binUrl, String &message)
     Serial.println("Bắt đầu OTA từ URL: " + binUrl);
     httpUpdate.rebootOnUpdate(false);
 
-    t_httpUpdate_return ret;
-    if (isHttpsUrl(binUrl))
-    {
-        WiFiClientSecure client;
-        client.setInsecure();
-        client.setTimeout(OTA_CLIENT_TIMEOUT_MS);
-        ret = httpUpdate.update(client, binUrl);
-    }
-    else
-    {
-        WiFiClient client;
-        client.setTimeout(OTA_CLIENT_TIMEOUT_MS);
-        ret = httpUpdate.update(client, binUrl);
-    }
+    WiFiClientSecure secureClient;
+    WiFiClient normalClient;
+    WiFiClient &client = isHttpsUrl(binUrl) ? static_cast<WiFiClient&>(secureClient) : normalClient;
+
+    if (isHttpsUrl(binUrl)) secureClient.setInsecure();
+    client.setTimeout(OTA_CLIENT_TIMEOUT_MS);
+
+    t_httpUpdate_return ret = httpUpdate.update(client, binUrl);
 
     switch (ret)
     {

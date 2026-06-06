@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api, type User } from "./api";
-import Dashboard from "./pages/Dashboard";
-import Devices from "./pages/Devices";
+import Dashboard from "./pages/dashboard";
+import Devices from "./pages/devices";
 import Login from "./pages/Login";
 import Users from "./pages/Users";
 

@@ -35,8 +35,6 @@ private:
     void handleReboot();
     void handleIP();
 
-    String getConfigHTML();
-    String getStatusHTML();
 };
 
 #endif // WEBCONFIG_H
