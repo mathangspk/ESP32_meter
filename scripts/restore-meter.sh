@@ -7,16 +7,16 @@
 set -euo pipefail
 
 # Configurations
-BACKUP_DIR="/home/tma_agi/mongodb_backups"
-DEPLOY_DIR="/home/tma_agi/esp32_loss_power_deploy"
+BACKUP_DIR="$HOME/mongodb_backups"
+DEPLOY_DIR="$HOME/esp32_loss_power_deploy"
 DB_NAME="esp32_power_monitor"
 CONTAINER="esp32losspowerdeploy_mongodb_1"
 RCLONE_DIR="tma-agi-backup:esp32_meter"
 
 # Resolve rclone command path
 RCLONE_CMD="rclone"
-if [ -f "/home/tma_agi/rclone" ]; then
-    RCLONE_CMD="/home/tma_agi/rclone"
+if [ -f "$HOME/rclone" ]; then
+    RCLONE_CMD="$HOME/rclone"
 fi
 
 # Resolve Docker Compose command
@@ -204,11 +204,11 @@ fi
 echo "[5/7] Deploying application containers via Docker Compose..."
 cd "$DEPLOY_DIR"
 # Use VPS pull/rebuild policy
-if DOCKER_CONFIG=/home/tma_agi/ghcr-docker-config $COMPOSE_CMD -f docker-compose.deploy.yml up -d; then
+if DOCKER_CONFIG="$HOME/ghcr-docker-config" $COMPOSE_CMD -f docker-compose.deploy.yml up -d; then
     echo "      Docker services started successfully."
 else
     echo "      WARNING: Failed to boot using docker-compose.deploy.yml. Retrying with build flag..."
-    DOCKER_CONFIG=/home/tma_agi/ghcr-docker-config $COMPOSE_CMD -f docker-compose.deploy.yml up -d --build
+    DOCKER_CONFIG="$HOME/ghcr-docker-config" $COMPOSE_CMD -f docker-compose.deploy.yml up -d --build
 fi
 
 echo "      Waiting 8 seconds for MongoDB container to fully initialize..."
@@ -217,6 +217,15 @@ sleep 8
 # 6. Restore MongoDB database dump
 echo "[6/7] Restoring MongoDB database collections..."
 if [ -d "$EXTRACTED_PATH/db/$DB_NAME" ]; then
+    # Dynamically resolve container name if not running under the default name
+    if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+        if docker ps --format '{{.Names}}' | grep -q -- "-mongodb-1$"; then
+            CONTAINER=$(docker ps --format '{{.Names}}' | grep -- "-mongodb-1$" | head -n 1)
+        elif docker ps --format '{{.Names}}' | grep -q "_mongodb_1$"; then
+            CONTAINER=$(docker ps --format '{{.Names}}' | grep "_mongodb_1$" | head -n 1)
+        fi
+    fi
+
     if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
         # Copy raw dump directory into MongoDB container temp space
         docker cp "$EXTRACTED_PATH/db/$DB_NAME" "${CONTAINER}:/tmp/"

@@ -4,6 +4,29 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## VPS Restoration & Security Hardening Milestone (2026-06-06)
+
+### What Was Confirmed & Verified
+- **SSH Key-Only Hardening**: Configured key-only SSH authentication for user `technician` on the new VPS (`167.71.207.5`). Verified that password login is disabled.
+- **Dynamic Path & Container Resolution**: Verified that modified scripts (`restore-meter.sh`, `backup-meter.sh`, `setup-backup-cron.sh`) run correctly on the new VPS by dynamically resolving user home directory ($HOME) and container names (ends with `-mongodb-1` or `_mongodb_1`).
+- **Disaster Recovery Restore**: Executed `restore-meter.sh --latest` using the retrieved production `JWT_SECRET` key. Downloaded the latest Google Drive backup, decrypted it, recreated all environment configurations, and successfully restored MongoDB database collections.
+- **Test Backup & GDrive Sync**: Executed `backup-meter.sh` successfully on the new VPS. Confirmed that it dumps the restored DB, AES-256 encrypts the archive, and uploads it to Google Drive remote (`tma-agi-backup:esp32_meter`) while applying the 7-day retention cleanup policy.
+- **System Health**: All 5 services (`mosquitto`, `mongodb`, `backend`, `frontend`, `assistant-bot`) are running healthy. Backend health status returns `ok` with successful connections to both MQTT and MongoDB.
+
+### What Changed
+- **`scripts/restore-meter.sh`**: Updated hardcoded home directories to `$HOME` and added dynamic container name resolution right before database restoration. Added `--` option separator to `grep` pattern checks to prevent option interpretation.
+- **`scripts/backup-meter.sh`**: Updated home directories to `$HOME` and added dynamic container name resolution inside the dump step. Added `--` option separator to `grep` patterns.
+- **`scripts/setup-backup-cron.sh`**: Modified hardcoded script and log path variables to use `$HOME`.
+- **`docs/handoff.md`**: Prepend this milestone to the top of the handoff document.
+
+### Remaining Issues
+- None. System is fully operational and database restored on the new VPS.
+
+### Exact Next Step
+- Advise the user to access the web dashboard at `http://167.71.207.5:8080` to verify restored devices and historical telemetry.
+
+---
+
 ## Web Dashboard IP Display & Firmware OTA Update v1.0.2 Milestone (2026-06-06)
 
 ### What Was Confirmed & Verified

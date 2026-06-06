@@ -6,8 +6,8 @@
 # ==============================================================================
 set -euo pipefail
 
-SCRIPT_PATH="/home/tma_agi/esp32_loss_power_deploy/scripts/backup-meter.sh"
-LOG_PATH="/home/tma_agi/mongodb_backups/backup.log"
+SCRIPT_PATH="$HOME/esp32_loss_power_deploy/scripts/backup-meter.sh"
+LOG_PATH="$HOME/mongodb_backups/backup.log"
 
 echo "======================================================================"
 echo "Installing Automated Backup Cron Job: $(date)"

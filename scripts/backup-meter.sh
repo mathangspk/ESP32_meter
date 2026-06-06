@@ -7,8 +7,8 @@
 set -euo pipefail
 
 # Configurations
-BACKUP_DIR="/home/tma_agi/mongodb_backups"
-DEPLOY_DIR="/home/tma_agi/esp32_loss_power_deploy"
+BACKUP_DIR="$HOME/mongodb_backups"
+DEPLOY_DIR="$HOME/esp32_loss_power_deploy"
 DB_NAME="esp32_power_monitor"
 CONTAINER="esp32losspowerdeploy_mongodb_1"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -18,8 +18,8 @@ KEEP_DAYS=7
 
 # Resolve rclone command path
 RCLONE_CMD="rclone"
-if [ -f "/home/tma_agi/rclone" ]; then
-    RCLONE_CMD="/home/tma_agi/rclone"
+if [ -f "$HOME/rclone" ]; then
+    RCLONE_CMD="$HOME/rclone"
 fi
 
 # Load backup passphrase from env file if available
@@ -45,6 +45,15 @@ mkdir -p "$BACKUP_DIR"
 
 # 2. Dump MongoDB database
 echo "[1/7] Dumping MongoDB database..."
+# Dynamically resolve container name if not running under the default name
+if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    if docker ps --format '{{.Names}}' | grep -q -- "-mongodb-1$"; then
+        CONTAINER=$(docker ps --format '{{.Names}}' | grep -- "-mongodb-1$" | head -n 1)
+    elif docker ps --format '{{.Names}}' | grep -q "_mongodb_1$"; then
+        CONTAINER=$(docker ps --format '{{.Names}}' | grep "_mongodb_1$" | head -n 1)
+    fi
+fi
+
 if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
     docker exec "$CONTAINER" mongodump --db "$DB_NAME" --out "/tmp/${BACKUP_NAME}_db" --quiet
     docker cp "${CONTAINER}:/tmp/${BACKUP_NAME}_db/${DB_NAME}" "$TEMP_DIR/db/"
