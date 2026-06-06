@@ -64,9 +64,9 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           {form.systemRole === "user" && (
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Tenant (optional)</label>
-                <select value={form.tenantId ?? ""} onChange={(e) => setForm((f) => ({ ...f, tenantId: e.target.value || undefined }))}>
-                  <option value="">— No tenant —</option>
+                <label className="form-label">Tenant</label>
+                <select value={form.tenantId ?? ""} onChange={(e) => setForm((f) => ({ ...f, tenantId: e.target.value || undefined }))} required>
+                  <option value="">-- Select Tenant --</option>
                   {tenants.map((t) => (
                     <option key={t.tenantId} value={t.tenantId}>{t.name} ({t.tenantId})</option>
                   ))}
