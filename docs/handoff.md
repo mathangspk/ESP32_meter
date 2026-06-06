@@ -9,11 +9,13 @@ System stable and fully deployed. Web dashboard maturing toward end-user access.
 ### What Was Confirmed & Verified
 - **Frontend Dashboard IP Column**: Added an "Địa chỉ IP" (Internal IP) column directly to the devices tables in both `Dashboard.tsx` and `Devices.tsx`. The IP address is displayed as a link that opens the device web interface in a new tab without opening the details modal.
 - **OTA Dropdown Filtering**: Filtered the select version dropdown in the Controls tab to only display releases compatible with the current device's board type (ESP32 for ESP32, ESP8266 for ESP8266), resolving version selection conflict.
+- **Backend OTA Request Validation**: Made `actorUserId` optional in the Zod parser schema on `/devices/:deviceId/ota`, resolving the Zod 400 Bad Request error triggered by the dashboard UI.
 - **Firmware Version v1.0.2 Build**: Successfully compiled ESP32 and ESP8266 firmwares with `FIRMWARE_VERSION="1.0.2"`.
 - **VPS Binary Deployment**: Copied `esp32-meter-1.0.2.bin` and `esp8266-meter-1.0.2.bin` to `/home/tma_agi/esp32_loss_power_deploy/firmware-host/` on the VPS.
 - **OTA Job Triggered**: Registered the new firmware releases in MongoDB and triggered OTA updates for active devices (`7B34E3EC` & `004A936C`). ESP32 device confirmed transition to `received` -> `downloading`.
 
 ### What Changed
+- **`backend/src/types.ts`**: Made `actorUserId` optional in `otaReleaseRequestSchema`.
 - **`frontend/src/api.ts`**: Added `boardType` to `Device` type definition.
 - **`frontend/src/pages/Dashboard.tsx`**: Added IP address column with link click propagation handling.
 - **`frontend/src/pages/Devices.tsx`**: Added IP address column to list view, defined `filteredReleases` to filter releases dynamically, and updated selection dropdown rendering.

@@ -62,7 +62,7 @@ export type OtaCommandRequest = z.infer<typeof otaCommandRequestSchema>;
 
 export const otaReleaseRequestSchema = z.object({
   version: z.string().min(1),
-  actorUserId: z.string().min(1),
+  actorUserId: z.string().min(1).optional(),
 });
 
 export type OtaReleaseRequest = z.infer<typeof otaReleaseRequestSchema>;
