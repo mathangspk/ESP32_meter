@@ -5,21 +5,31 @@ export function DeviceDetailInfo({ device }: { device: Device }) {
   const [telemetry, setTelemetry] = useState<TelemetryRow[]>([]);
 
   useEffect(() => {
-    api.telemetry(device.serialNumber).then(setTelemetry).catch(console.error);
+    const fetchTelemetry = () => {
+      api.telemetry(device.serialNumber).then(setTelemetry).catch(console.error);
+    };
+    fetchTelemetry();
+    const interval = setInterval(fetchTelemetry, 3000);
+    return () => clearInterval(interval);
   }, [device.serialNumber]);
+
+  const latest = telemetry[0];
+  const isOff = latest 
+    ? (Date.now() - new Date(latest.timestamp).getTime()) > 45000 
+    : device.state?.isOffline !== false;
 
   const stats = [
     ["Serial", device.serialNumber],
-    ["Trạng thái", device.state?.isOffline === false ? "Online" : "Offline"],
+    ["Trạng thái", !isOff ? "Online" : "Offline"],
     ["Firmware", device.lastFirmwareVersion ?? "—"],
     ["Địa chỉ IP", device.ipAddress ? (
       <a href={`http://${device.ipAddress}`} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
         {device.ipAddress}
       </a>
     ) : "—"],
-    ["Điện áp", device.state?.lastVoltage ? `${device.state.lastVoltage.toFixed(1)} V` : "— V"],
-    ["Dòng điện", device.state?.lastCurrent ? `${device.state.lastCurrent.toFixed(3)} A` : "— A"],
-    ["Công suất", device.state?.lastPower ? `${device.state.lastPower.toFixed(0)} W` : "— W"],
+    ["Điện áp", latest?.voltage !== undefined ? `${latest.voltage.toFixed(1)} V` : device.state?.lastVoltage ? `${device.state.lastVoltage.toFixed(1)} V` : "— V"],
+    ["Dòng điện", latest?.current !== undefined ? `${latest.current.toFixed(3)} A` : device.state?.lastCurrent ? `${device.state.lastCurrent.toFixed(3)} A` : "— A"],
+    ["Công suất", latest?.power !== undefined ? `${latest.power.toFixed(0)} W` : device.state?.lastPower ? `${device.state.lastPower.toFixed(0)} W` : "— W"],
   ];
 
   return (
@@ -32,7 +42,7 @@ export function DeviceDetailInfo({ device }: { device: Device }) {
           </div>
         ))}
       </div>
-      <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 13 }}>Dữ liệu Telemetry gần đây</div>
+      <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 13 }}>Dữ liệu Telemetry gần đây (Cập nhật 3s/lần)</div>
       <div style={{ maxHeight: 240, overflowY: "auto" }}>
         <table>
           <thead>
