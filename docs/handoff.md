@@ -4,6 +4,28 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Web Dashboard Unclaim Device Feature Milestone (2026-06-07)
+
+### What Was Confirmed & Verified
+- **Unclaim Device Integration**: Added unclaim device (Hủy liên kết thiết bị) controls in the Controls tab of the Web Dashboard. When clicked, it successfully calls the backend action API to unclaim the device from the tenant, and removes it from the frontend lists dynamically.
+- **Backend Validation Resolved**: Made `actorUserId` optional in the Zod parser schema on `/devices/:deviceId/actions` and resolved it to the active JWT user ID. Verified that both local builds and VPS runtime container are healthy.
+- **File line-limit Compliance**: Ensured that the refactored code remains under the 100-line maximum limit (e.g. `DeviceDetailControls.tsx` is kept at 73 lines).
+
+### What Changed
+- **`backend/src/`**:
+  * `types.ts`: Made `actorUserId` optional in `deviceActionRequestSchema`.
+  * `device-actions.ts`: Added default fallback for `actorUserId` to comply with TS types.
+  * `routes/devices.actions.ts`: Injected JWT user ID into `performDeviceAction`.
+- **`frontend/src/pages/`**:
+  * `devices/DeviceDetailControls.tsx`: Refactored to include unclaim action card and parent callback handler.
+  * `devices/DeviceDetailModal.tsx`, `devices/DevicesPage.tsx`, and `dashboard/DashboardPage.tsx`: Integrated parent state update callback `onDeviceUnclaimed`.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Monitor device telemetry and user management.
+
 ## Hourly Analytics Date Selection & Real-time Rollup Milestone (2026-06-07)
 
 ### What Was Confirmed & Verified
