@@ -9,6 +9,8 @@ System stable and fully deployed. Web dashboard maturing toward end-user access.
 ### What Was Confirmed & Verified
 - **Successful Firmware Compile**: Verified that the modified firmware compiles successfully using PlatformIO for both ESP32 (`esp32doit-devkit-v1`) and ESP8266 (`nodemcuv2`) with zero compiler/linker errors.
 - **100-Line Limit Compliance**: Confirmed that every single modified and new code file is under the 100-line code limit.
+- **OTA Updates Deployed**: Successfully deployed and verified version `1.0.3` firmware on all three active devices in the fleet: `004A936C`, `7B34E3EC`, and `D534E3EC`.
+- **Failover & Recovery Verified**: Verified active-passive failover and real-time MQTT bridge telemetry forwarding by stopping the primary broker container and checking backup broker connection and database state.
 
 ### What Changed
 - **`include/WebConfigHTML.h`**: Added Backup MQTT server and port input fields to configuration HTML template.
@@ -24,13 +26,14 @@ System stable and fully deployed. Web dashboard maturing toward end-user access.
   * `DataSender.cpp`: Implemented 5-minute primary check loop to fallback to primary once it is online.
   * `DataSenderMQTT.cpp`: Programmed cycling failover connection logic upon 3 consecutive broker failures.
   * `main.cpp`: Passed backup parameters to `updateConfig` during setup.
+- **`platformio.ini`**: Set default firmware build version to `"1.0.3"` for both target boards.
 - **`handoff.md`**: Updated the root handoff description.
 
 ### Remaining Issues
 - None.
 
 ### Exact Next Step
-- Commit and push changes to main. Advise user to perform OTA updates or local USB flash using the compiled binaries.
+- Monitor long-term system stability of version `1.0.3` under failover conditions.
 
 ---
 
