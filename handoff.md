@@ -1,18 +1,19 @@
-# Project Handoff - OTA Firmware Release Catalog Synchronization (v1.0.8)
+# Project Handoff - Hourly Analytics Date Selection & Real-time Rollup (v1.0.8)
 
 ## Summary of Changes
-- **Firmware Release Synchronization**: Registered the missing firmware versions (`1.0.2`, `1.0.3`, `1.0.4`, `1.0.6`, `1.0.7`, `1.0.8`) for both ESP32 (`esp32doit-devkit-v1`) and ESP8266 (`nodemcuv2`) in the MongoDB `firmware_releases` collection on the VPS.
-- **Web UI Dropdown List Verified**: Resolved the issue where the remote firmware update (OTA) dropdown list in the web dashboard did not show the latest firmware versions (e.g. `1.0.8`).
+- **Date Picker Functionality**: Added a date selection input for the hourly power chart on the Web Dashboard's Analytics tab, allowing users to query hourly averages for any custom selected date.
+- **On-Demand Hourly Rollup**: Integrated an on-demand rollup hook in the backend. When querying today's date, it triggers a live rollup calculation up to the current hour, guaranteeing that fresh telemetry data is converted into hourly aggregates and shown instantly on the dashboard (previously today's hourly chart remained blank until the next day).
+- **Line-limit Compliance**: Ensured that the refactored code splits visual chart layouts into `DeviceDetailAnalyticsCharts.tsx` to keep files strictly under the project-wide 100-line maximum limit.
 
 ## Current System State
 - Test device `7B34E3EC` (`nhaba`, ESP32) is fully functional and running version `1.0.8`. It is online, reporting telemetry normally.
 - Production device `D534E3EC` (`NhaLong`, ESP32) is fully functional, successfully upgraded, online, and running version `1.0.8`.
 - Production device `004A936C` (`NLMT_Long`, ESP8266) is fully functional, successfully upgraded, online, and running version `1.0.8`.
-- Web Dashboard is fully functional and now properly shows all firmware versions in the remote OTA update dropdown.
+- Web Dashboard is fully functional and now properly shows all firmware versions in the remote OTA update dropdown and allows selecting specific dates for hourly analysis.
 
 ## Verification & Testing
-- **MongoDB query verification**: Confirmed that all 12 newly registered release records (`1.0.2` to `1.0.8` for both boards) are successfully saved with correct metadata and URLs.
-- **API Response verification**: `GET /api/admin/firmware/releases` successfully returns the newly registered releases.
+- **TypeScript and Vite compilation**: Verified frontend compilation via `npm run build` and backend typechecking via `npm run typecheck` which both succeeded with 0 errors.
+- **API Response verification**: Verified via VPS curl test that querying today's hourly analytics dynamically rolls up and returns the hourly aggregate record for the current hour.
 
 ## Next Steps
-- Monitor fleet stability and continue regular telemetry operations.
+- Monitor device updates and continue regular operations.

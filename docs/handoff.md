@@ -4,6 +4,26 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Hourly Analytics Date Selection & Real-time Rollup Milestone (2026-06-07)
+
+### What Was Confirmed & Verified
+- **Date Picker Functionality**: Added date picker for the hourly power chart to let users select and analyze any specific date.
+- **On-Demand Hourly Rollup**: Integrated an on-demand rollup hook in the backend GET `/api/devices/:deviceId/analytics/hourly` endpoint. If today is queried, it performs on-the-fly rollup up to the current hour. Verified via VPS curl test that today's aggregates return instantly.
+- **File line-limit Compliance**: Kept all files strictly under the project-wide 100-line limit by splitting visual charts into `DeviceDetailAnalyticsCharts.tsx`.
+- **Successful Builds & Deploy**: Verified successful frontend build and backend typechecks. Deployed both containers on VPS.
+
+### What Changed
+- **`frontend/src/pages/devices/`**:
+  * `DeviceDetailAnalytics.tsx`: Refactored to manage `hourlyDate` picker state and update data hooks.
+  * `DeviceDetailAnalyticsCharts.tsx` [NEW]: Created to encapsulate Recharts daily and hourly rendering code.
+- **`backend/src/routes/devices.analytics.ts`**: Implemented on-demand rollup execution for today's data requests.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Advise the user to open the analytics tab and query hourly data.
+
 ## OTA Firmware Release Catalog Synchronization Milestone (2026-06-07)
 
 ### What Was Confirmed & Verified
