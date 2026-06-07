@@ -63,7 +63,7 @@ bool NetworkManager::connect(ConfigManager* configManager)
         Serial.println("Multiple WiFi failures. Portal runs indefinitely.");
         wm.setConfigPortalTimeout(0);
     } else {
-        wm.setConfigPortalTimeout(120);
+        wm.setConfigPortalTimeout(300);
     }
     wm.setConnectTimeout(30);
     String apName = "PZEM_Meter_" + WiFi.macAddress().substring(12);
