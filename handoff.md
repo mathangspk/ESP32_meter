@@ -10,16 +10,19 @@
 - **Version Bump**: Bumped default firmware version to `1.0.8` in `platformio.ini`.
 
 ## Current System State
-- Test device `7B34E3EC` (`nhaba`, ESP32) is fully functional and running version `1.0.8`. It is currently online, reporting telemetry normally.
-- Production device `D534E3EC` (`NhaLong`, ESP32) is currently online and running version `1.0.3`.
-- Production device `004A936C` (`NLMT_Long`, ESP8266) is currently online and running version `1.0.3` (having been successfully power cycled by the user).
+- Test device `7B34E3EC` (`nhaba`, ESP32) is fully functional and running version `1.0.8`. It is online, reporting telemetry normally.
+- Production device `D534E3EC` (`NhaLong`, ESP32) is fully functional, successfully upgraded, online, and running version `1.0.8`.
+- Production device `004A936C` (`NLMT_Long`, ESP8266) is fully functional, successfully upgraded, online, and running version `1.0.8`.
 - All code compiles successfully with PlatformIO for both `esp32doit-devkit-v1` and `nodemcuv2` targets.
 - All code files in the workspace strictly comply with the 100-line maximum limit.
 
 ## Verification & Testing
 - **Firmware Compilation**: Succeeded for both `esp32doit-devkit-v1` and `nodemcuv2` targets.
-- **OTA Deployment**: Successfully upgraded test device `7B34E3EC` (`nhaba`, ESP32) to version `1.0.8` via backend OTA. Device is online, reporting telemetry and running cleanly on version `1.0.8`.
-- **ESP8266 Status**: Verified that the production device `004A936C` (`NLMT_Long`) is online.
+- **OTA Deployment & Verification**:
+  - Test device `nhaba` successfully upgraded to `1.0.8` via OTA and verified online.
+  - Production device `NhaLong` successfully upgraded to `1.0.8` via OTA, verified online, and sending telemetry.
+  - Production device `NLMT_Long` successfully upgraded to `1.0.8` via OTA, verified online, and sending telemetry.
+- **Fleet Status**: 100% of devices in the fleet are confirmed online, healthy, and running version `1.0.8`.
 
 ## Next Steps
-- Trigger the OTA update to version `1.0.8` for the production devices `004A936C` and `D534E3EC` via the backend API.
+- Monitor fleet stability and continue regular telemetry operations.

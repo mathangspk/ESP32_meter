@@ -762,11 +762,15 @@ ssh vps-prod "curl -sS http://127.0.0.1:3000/devices/7B34E3EC/firmware-policy"
 
 ### Verification & Testing
 - **Compilation**: Succeeded for both `esp32doit-devkit-v1` and `nodemcuv2` targets.
-- **OTA Deployment**: Successfully upgraded test device `7B34E3EC` (`nhaba`, ESP32) to version `1.0.8` via backend OTA. Device is online, reporting telemetry and running cleanly on version `1.0.8`.
-- **ESP8266 Status**: Verified that the production device `004A936C` (`NLMT_Long`) is online.
+- **OTA Deployment & Verification**:
+  - Test device `7B34E3EC` (`nhaba`, ESP32) successfully upgraded to `1.0.8` via OTA and verified online.
+  - Production device `D534E3EC` (`NhaLong`, ESP32) successfully upgraded to `1.0.8` via OTA, verified online, and sending telemetry.
+  - Production device `004A936C` (`NLMT_Long`, ESP8266) successfully upgraded to `1.0.8` via OTA, verified online, and sending telemetry.
+- All devices in the fleet are confirmed online and running version `1.0.8`.
 
 ### Next Steps
-- Trigger the OTA update to version `1.0.8` for the production devices `004A936C` and `D534E3EC` via the backend API.
+- Monitor fleet stability and continue regular telemetry operations.
+
 
 
 
