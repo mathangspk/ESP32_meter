@@ -4,6 +4,24 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Web Dashboard Real-time Telemetry Polling Milestone (2026-06-07)
+
+### What Was Confirmed & Verified
+- **Resource-Optimized Real-time Polling**: Implemented a 3-second polling interval inside the `DeviceDetailInfo` (Thông tin) tab.
+- **Resource Leak Prevention**: Registered clean `useEffect` timer cleanup (via `clearInterval`), guaranteeing that polling instantly stops and releases resources the moment the user closes the device detail modal.
+- **Dynamic Card Rendering**: Calculated and rendered real-time metrics (Voltage, Current, Power) and status indicator (Online/Offline) directly using the latest polled telemetry data.
+- **File line-limit Compliance**: Ensured `DeviceDetailInfo.tsx` remains well under 100 lines (exactly 67 lines).
+- **Clean VPS Deploy**: Pulled and restarted the frontend container successfully on the VPS.
+
+### What Changed
+- **`frontend/src/pages/devices/DeviceDetailInfo.tsx`**: Added polling loop, unmount clear logic, and updated metric cards to read values dynamically.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Monitor database storage footprint and telemetry throughput.
+
 ## Web Dashboard Unclaim Device Feature Milestone (2026-06-07)
 
 ### What Was Confirmed & Verified
