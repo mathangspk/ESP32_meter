@@ -11,6 +11,7 @@ System stable and fully deployed. Web dashboard maturing toward end-user access.
 - **100-Line Limit Compliance**: Confirmed that every single modified and new code file is under the 100-line code limit.
 - **OTA Updates Deployed**: Successfully deployed and verified version `1.0.3` firmware on all three active devices in the fleet: `004A936C`, `7B34E3EC`, and `D534E3EC`.
 - **Failover & Recovery Verified**: Verified active-passive failover and real-time MQTT bridge telemetry forwarding by stopping the primary broker container and checking backup broker connection and database state.
+- **Dangling Pointer Bug Resolved**: Fixed a critical bug in the failover broker switching logic where stack-allocated String references were passed to `client.setServer()`, causing crashes on the ESP8266 during simulated broker outages.
 
 ### What Changed
 - **`include/WebConfigHTML.h`**: Added Backup MQTT server and port input fields to configuration HTML template.
@@ -24,7 +25,7 @@ System stable and fully deployed. Web dashboard maturing toward end-user access.
   * `WebConfig.cpp`: Handled backup configuration variables in GET `/config` and POST `/config` routes.
   * `DataSender.h`: Added variables tracking failover state and updated `updateConfig` signature.
   * `DataSender.cpp`: Implemented 5-minute primary check loop to fallback to primary once it is online.
-  * `DataSenderMQTT.cpp`: Programmed cycling failover connection logic upon 3 consecutive broker failures.
+  * `DataSenderMQTT.cpp`: Swapped stack String with member `const char*` references inside `reconnect()` failover block.
   * `main.cpp`: Passed backup parameters to `updateConfig` during setup.
 - **`platformio.ini`**: Set default firmware build version to `"1.0.3"` for both target boards.
 - **`handoff.md`**: Updated the root handoff description.
@@ -33,7 +34,7 @@ System stable and fully deployed. Web dashboard maturing toward end-user access.
 - None.
 
 ### Exact Next Step
-- Monitor long-term system stability of version `1.0.3` under failover conditions.
+- Advise user to power cycle the ESP8266 device to get it out of the crash/bootloop state and connect to the primary broker, then trigger an OTA update to deploy the dangling pointer bug fix.
 
 ---
 

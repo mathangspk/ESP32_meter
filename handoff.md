@@ -3,6 +3,7 @@
 ## Summary of Changes
 - **Active-Passive MQTT Failover**: Implemented a connection failover strategy where the device targets the Primary MQTT broker. If it fails 3 consecutive times, it cycles targeting to the Backup MQTT broker.
 - **Preemptive Primary Reconnection**: When connected to the backup broker, the device checks every 5 minutes (300,000 ms) by disconnecting and attempting to reconnect to the primary broker. If it fails, it cycles back to the backup broker seamlessly.
+- **Dangling Pointer Bug Fix**: Fixed a dangling pointer bug in `DataSenderMQTT.cpp` reconnect logic where `targetServer` was copied to a local stack `String` variable before calling `client.setServer(targetServer.c_str(), port)`. Swapped with direct const char* referencing of member variables (`mqttServer.c_str()` and `mqttServerBackup.c_str()`) to prevent crashes or bootloops when broker failover is triggered.
 - **Configurable Backup Settings**: Added "Backup MQTT Server" and "Backup MQTT Port" input fields to the local Web Captive Portal configuration page (`WebConfigHTML.h` & `WebConfig.cpp`), which persists configuration variables to LittleFS.
 - **100-Line Limit Compliance**: Split `ConfigManagerIO.cpp` into `ConfigManagerLoad.cpp` and `ConfigManagerSave.cpp` across both ESP32 and ESP8266 platforms. Compiling and refactoring kept all modified files strictly under 100 lines.
 
@@ -14,14 +15,11 @@
 
 ## Verification & Testing
 - **Firmware Compilation**: Succeeded for both `esp32doit-devkit-v1` and `nodemcuv2` targets.
-- **OTA Upgrades**: Successfully deployed and verified version `1.0.3` OTA updates for:
-  - ESP8266 Device `004A936C` (NLMT_Long)
-  - ESP32 Device `7B34E3EC` (nhaba)
-  - ESP32 Device `D534E3EC` (NhaLong)
+- **OTA Upgrades**: Successfully deployed and verified version `1.0.3` OTA updates for ESP8266 Device `004A936C`, ESP32 Device `7B34E3EC`, and ESP32 Device `D534E3EC`.
 - **Active-Passive Failover Simulation**: Stopped the primary MQTT broker container (`esp32_loss_power_deploy-mosquitto-1`). Verified that devices successfully established connection with the backup broker and sent telemetry.
 - **MQTT Bridge Real-Time Forwarding**: Verified that telemetry published to the backup broker was bridged to the primary broker in real-time, allowing the primary backend to update the MongoDB database.
 - **Automatic Recovery**: Restarted the primary Mosquitto broker. Verified that the bridge and devices cleanly restored connection.
 
 ## Next Steps
+- Advise the user to power cycle the offline ESP8266 device to restore its connection. Once online, trigger another OTA update to deploy the dangling pointer bug fix.
 - Monitor long-term system stability of version `1.0.3` under failover conditions.
-- Implement any frontend dashboard enhancements desired by the user.

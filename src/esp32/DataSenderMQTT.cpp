@@ -28,11 +28,11 @@ void DataSender::reconnect()
         {
             isUsingBackup = !isUsingBackup;
             consecutiveFailures = 0;
-            String targetServer = isUsingBackup ? mqttServerBackup : mqttServer;
+            const char* targetServer = isUsingBackup ? mqttServerBackup.c_str() : mqttServer.c_str();
             int targetPort = isUsingBackup ? mqttPortBackup : mqttPort;
-            client.setServer(targetServer.c_str(), targetPort);
+            client.setServer(targetServer, targetPort);
             Serial.printf("⚠️ Switching MQTT target to %s: %s:%d\n", 
-                          isUsingBackup ? "BACKUP" : "PRIMARY", targetServer.c_str(), targetPort);
+                          isUsingBackup ? "BACKUP" : "PRIMARY", targetServer, targetPort);
             lastReconnectAttempt = 0;
         }
     }
