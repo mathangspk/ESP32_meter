@@ -59,8 +59,17 @@ devicesRouter.get("/:deviceId/analytics/hourly", checkDeviceAccess, async (req, 
   const dateParam = Array.isArray(req.query.date) ? req.query.date[0] : req.query.date;
   const date = String(dateParam || "today");
   try {
+    const device = await mongoService.getDeviceHealth(String(req.params.deviceId));
+    if (!device) { res.status(404).json({ error: "Device not found" }); return; }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (date === "today" || date === todayStr) {
+      const now = new Date();
+      const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      await mongoService.rollupTelemetryForDevice(device.serialNumber, device.deviceId, startOfToday, now);
+    }
+
     const summary = await mongoService.getHourlyBreakdown(String(req.params.deviceId), date);
-    if (!summary) { res.status(404).json({ error: "Device not found" }); return; }
     res.json(summary);
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to get hourly breakdown" });
