@@ -4,6 +4,21 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## OTA Firmware Release Catalog Synchronization Milestone (2026-06-07)
+
+### What Was Confirmed & Verified
+- **Firmware Release Synchronization**: Successfully registered the missing firmware versions (`1.0.2`, `1.0.3`, `1.0.4`, `1.0.6`, `1.0.7`, `1.0.8`) for both ESP32 (`esp32doit-devkit-v1`) and ESP8266 (`nodemcuv2`) in the MongoDB `firmware_releases` collection on the VPS.
+- **Web UI Dropdown List Verified**: Verified that the Web Dashboard's remote firmware update (OTA) version list now correctly populates and displays all compatible versions for the devices.
+
+### What Changed
+- **MongoDB `firmware_releases` Collection**: Registered 12 new firmware release records corresponding to the compiled bin files hosted on the VPS.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Monitor device updates and continue regular operations.
+
 ## Active-Passive MQTT Failover Redundancy Milestone (2026-06-07)
 
 ### What Was Confirmed & Verified
