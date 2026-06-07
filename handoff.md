@@ -1,25 +1,25 @@
-# Project Handoff - Active-Passive MQTT Failover Redundancy
+# Project Handoff - WiFi Reconfiguration Watchdog (v1.0.6)
 
 ## Summary of Changes
-- **Active-Passive MQTT Failover**: Implemented a connection failover strategy where the device targets the Primary MQTT broker. If it fails 3 consecutive times, it cycles targeting to the Backup MQTT broker.
-- **Preemptive Primary Reconnection**: When connected to the backup broker, the device checks every 5 minutes (300,000 ms) by disconnecting and attempting to reconnect to the primary broker. If it fails, it cycles back to the backup broker seamlessly.
-- **Dangling Pointer Bug Fix**: Fixed a dangling pointer bug in `DataSenderMQTT.cpp` reconnect logic where `targetServer` was copied to a local stack `String` variable before calling `client.setServer(targetServer.c_str(), port)`. Swapped with direct const char* referencing of member variables (`mqttServer.c_str()` and `mqttServerBackup.c_str()`) to prevent crashes or bootloops when broker failover is triggered.
-- **Configurable Backup Settings**: Added "Backup MQTT Server" and "Backup MQTT Port" input fields to the local Web Captive Portal configuration page (`WebConfigHTML.h` & `WebConfig.cpp`), which persists configuration variables to LittleFS.
-- **100-Line Limit Compliance**: Split `ConfigManagerIO.cpp` into `ConfigManagerLoad.cpp` and `ConfigManagerSave.cpp` across both ESP32 and ESP8266 platforms. Compiling and refactoring kept all modified files strictly under 100 lines.
+- **Persistent WiFi Failure Counter**: Implemented a boot WiFi failure count tracking mechanism stored in `/wifi_fail.txt` on LittleFS.
+- **Dynamic Portal Timeout**:
+  - For the first 3 consecutive failed boots, the config portal runs with a 120-second timeout, allowing auto-recovery and rebooting if the router is just slow to boot.
+  - On the 4th consecutive failed boot, the config portal runs indefinitely (`timeout = 0`) to allow the homeowner to easily connect and reconfigure the WiFi settings without the device rebooting.
+  - Successfully clearing/removing the fail counter upon successful WiFi connection (either auto-connect, forced WiFi, or new config save).
+- **Line-limit Compliance**: Ensured that the modified `NetworkManagerConnect.cpp` on both ESP32 and ESP8266 platforms remains under 100 lines (exactly 94 lines).
+- **Version Bump**: Bumped default firmware version to `1.0.6` in `platformio.ini`.
 
 ## Current System State
-- All three devices in the fleet are fully functional and run version `1.0.3` with active-passive MQTT failover redundancy.
-- Mosquitto MQTT Bridge is active and configured on the backup server (`113.161.220.166` / Tailscale `100.77.157.70`) pointing to primary (`167.71.207.5`), bridging telemetry topics (`meter/+/data`, `meter/+/ota/status`) and control/OTA topics.
-- Every single code and stylesheet file in the repository satisfies the 100-line limit.
+- Test device `7B34E3EC` (`nhaba`, ESP32) is fully functional and running version `1.0.6`. It is currently online, reporting telemetry normally.
+- Production device `D534E3EC` (`NhaLong`, ESP32) is currently online and running version `1.0.3`.
+- Production device `004A936C` (`NLMT_Long`, ESP8266) is currently offline and running version `1.0.3` (which contains the dangling pointer bug, causing it to remain offline until a physical power cycle is performed).
 - All code compiles successfully with PlatformIO for both `esp32doit-devkit-v1` and `nodemcuv2` targets.
+- All code files in the workspace strictly comply with the 100-line maximum limit.
 
 ## Verification & Testing
 - **Firmware Compilation**: Succeeded for both `esp32doit-devkit-v1` and `nodemcuv2` targets.
-- **OTA Upgrades**: Successfully deployed and verified version `1.0.3` OTA updates for ESP8266 Device `004A936C`, ESP32 Device `7B34E3EC`, and ESP32 Device `D534E3EC`.
-- **Active-Passive Failover Simulation**: Stopped the primary MQTT broker container (`esp32_loss_power_deploy-mosquitto-1`). Verified that devices successfully established connection with the backup broker and sent telemetry.
-- **MQTT Bridge Real-Time Forwarding**: Verified that telemetry published to the backup broker was bridged to the primary broker in real-time, allowing the primary backend to update the MongoDB database.
-- **Automatic Recovery**: Restarted the primary Mosquitto broker. Verified that the bridge and devices cleanly restored connection.
+- **OTA Deployment**: Successfully upgraded test device `7B34E3EC` (`nhaba`, ESP32) to version `1.0.6` via backend OTA. Device is online, reporting telemetry and running cleanly on version `1.0.6`.
 
 ## Next Steps
-- Advise the user to power cycle the offline ESP8266 device to restore its connection. Once online, trigger another OTA update to deploy the dangling pointer bug fix.
-- Monitor long-term system stability of version `1.0.3` under failover conditions.
+- Prompt the user to power cycle the production device `004A936C` (`NLMT_Long`, ESP8266) to restore its connection.
+- Once online, deploy version `1.0.6` to production devices `004A936C` and `D534E3EC` via backend OTA.

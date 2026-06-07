@@ -1,11 +1,10 @@
 #include "NetworkManager.h"
 #include <WiFiManager.h>
 #include "ConfigManager.h"
+#include <LittleFS.h>
 
 #ifndef FORCED_WIFI_SSID
 #define FORCED_WIFI_SSID ""
-#endif
-#ifndef FORCED_WIFI_PASSWORD
 #define FORCED_WIFI_PASSWORD ""
 #endif
 
@@ -15,31 +14,37 @@ bool NetworkManager::connect(ConfigManager* configManager)
     const String forcedPassword = FORCED_WIFI_PASSWORD;
 
     if (!forcedSsid.isEmpty()) {
-        Serial.println("Trying forced WiFi from build flags...");
+        Serial.println("Trying forced WiFi...");
         WiFi.mode(WIFI_STA);
         WiFi.begin(forcedSsid.c_str(), forcedPassword.c_str());
         unsigned long start = millis();
         while (WiFi.status() != WL_CONNECTED && millis() - start < 30000) {
-            delay(500);
-            Serial.print(".");
+            delay(500); Serial.print(".");
         }
         Serial.println();
         if (WiFi.status() == WL_CONNECTED) {
             Serial.println("✅ Forced WiFi connected!");
+            LittleFS.remove("/wifi_fail.txt");
             return true;
         }
-        Serial.println("⚠️ Forced WiFi connection failed");
+        Serial.println("⚠️ Forced WiFi failed");
         WiFi.disconnect(true);
         delay(500);
     }
 
+    int failCount = 0;
+    if (LittleFS.exists("/wifi_fail.txt")) {
+        File f = LittleFS.open("/wifi_fail.txt", "r");
+        if (f) { failCount = f.readString().toInt(); f.close(); }
+    }
+    File f = LittleFS.open("/wifi_fail.txt", "w");
+    if (f) { f.print(failCount + 1); f.close(); }
+    Serial.printf("WiFi failures: %d\n", failCount + 1);
+
     WiFiManager wm;
-    WiFiManagerParameter* custom_mqtt_server = nullptr;
-    WiFiManagerParameter* custom_mqtt_port = nullptr;
-    WiFiManagerParameter* custom_mqtt_user = nullptr;
-    WiFiManagerParameter* custom_mqtt_pass = nullptr;
-    WiFiManagerParameter* custom_device_id = nullptr;
-    WiFiManagerParameter* custom_serial_number = nullptr;
+    WiFiManagerParameter *custom_mqtt_server = nullptr, *custom_mqtt_port = nullptr;
+    WiFiManagerParameter *custom_mqtt_user = nullptr, *custom_mqtt_pass = nullptr;
+    WiFiManagerParameter *custom_device_id = nullptr, *custom_serial_number = nullptr;
 
     if (configManager != nullptr) {
         custom_mqtt_server = new WiFiManagerParameter("server", "MQTT Server", configManager->getMqttServer().c_str(), 40);
@@ -54,7 +59,12 @@ bool NetworkManager::connect(ConfigManager* configManager)
         wm.addParameter(custom_device_id); wm.addParameter(custom_serial_number);
     }
 
-    wm.setConfigPortalTimeout(180);
+    if (failCount + 1 > 3) {
+        Serial.println("Multiple WiFi failures. Portal runs indefinitely.");
+        wm.setConfigPortalTimeout(0);
+    } else {
+        wm.setConfigPortalTimeout(120);
+    }
     wm.setConnectTimeout(30);
     String apName = "PZEM_Meter_" + WiFi.macAddress().substring(12);
     apName.replace(":", "");
@@ -62,13 +72,13 @@ bool NetworkManager::connect(ConfigManager* configManager)
     bool result = wm.autoConnect(apName.c_str());
     if (result) {
         Serial.println("✅ WiFi connected! IP: " + WiFi.localIP().toString());
+        LittleFS.remove("/wifi_fail.txt");
         if (configManager != nullptr && custom_mqtt_server != nullptr) {
-            if (custom_mqtt_server->getValue()[0] != '\0') configManager->updateConfig("mqtt_server", custom_mqtt_server->getValue());
-            if (custom_mqtt_port->getValue()[0] != '\0') configManager->updateConfig("mqtt_port", String(custom_mqtt_port->getValue()).toInt());
-            if (custom_mqtt_user->getValue()[0] != '\0') configManager->updateConfig("mqtt_username", custom_mqtt_user->getValue());
-            if (custom_mqtt_pass->getValue()[0] != '\0') configManager->updateConfig("mqtt_password", custom_mqtt_pass->getValue());
-            if (custom_device_id->getValue()[0] != '\0') configManager->updateConfig("device_id", custom_device_id->getValue());
-            if (custom_serial_number->getValue()[0] != '\0') configManager->updateConfig("serial_number", custom_serial_number->getValue());
+            auto upd = [&](const char* k, WiFiManagerParameter* p) { if (p && p->getValue()[0]) configManager->updateConfig(k, p->getValue()); };
+            upd("mqtt_server", custom_mqtt_server);
+            if (custom_mqtt_port && custom_mqtt_port->getValue()[0]) configManager->updateConfig("mqtt_port", String(custom_mqtt_port->getValue()).toInt());
+            upd("mqtt_username", custom_mqtt_user); upd("mqtt_password", custom_mqtt_pass);
+            upd("device_id", custom_device_id); upd("serial_number", custom_serial_number);
             configManager->saveConfig();
         }
     } else {

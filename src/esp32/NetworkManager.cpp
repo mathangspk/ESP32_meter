@@ -1,4 +1,5 @@
 #include "NetworkManager.h"
+#include <WiFi.h>
 #include <WiFiManager.h>
 #include "ConfigManager.h"
 
@@ -12,8 +13,9 @@ bool NetworkManager::isConnected()
 bool NetworkManager::reconnect(ConfigManager* configManager)
 {
     if (!isConnected()) {
-        Serial.println("Đang thử kết nối lại WiFi...");
-        return connect(configManager);
+        Serial.println("Đang thử kết nối lại WiFi (non-blocking)...");
+        WiFi.begin();
+        return false;
     }
     return true;
 }
