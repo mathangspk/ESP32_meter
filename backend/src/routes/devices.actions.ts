@@ -7,7 +7,8 @@ import { deviceActionRequestSchema, otaReleaseRequestSchema } from "../types";
 devicesRouter.post("/:deviceId/actions", checkDeviceAccess, async (req, res) => {
   try {
     const input = deviceActionRequestSchema.parse(req.body);
-    const result = await performDeviceAction(req.params.deviceId as string, input);
+    const actorUserId = input.actorUserId || (req as any).user?.userId || "system";
+    const result = await performDeviceAction(req.params.deviceId as string, { ...input, actorUserId });
     res.status(input.action === "remove" ? 200 : 202).json(result);
   } catch (error) {
     if (error instanceof ZodError) {

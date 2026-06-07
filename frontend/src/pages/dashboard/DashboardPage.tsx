@@ -52,6 +52,10 @@ export function DashboardPage({ user }: { user?: User }) {
             setSelected((prev) => (prev ? { ...prev, displayName: updated.displayName } : null));
             setDevices((prev) => prev.map((d) => (d.deviceId === updated.deviceId ? { ...d, displayName: updated.displayName } : d)));
           }}
+          onDeviceUnclaimed={(id) => {
+            setSelected(null);
+            setDevices((prev) => prev.filter((d) => d.deviceId !== id));
+          }}
         />
       )}
     </>

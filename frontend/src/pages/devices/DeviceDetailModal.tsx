@@ -4,7 +4,7 @@ import { DeviceDetailInfo } from "./DeviceDetailInfo";
 import { DeviceDetailAnalytics } from "./DeviceDetailAnalytics";
 import { DeviceDetailControls } from "./DeviceDetailControls";
 
-export function DeviceDetailModal({ device, user, onClose, onDeviceUpdated }: { device: Device; user?: User; onClose: () => void; onDeviceUpdated?: (updated: Device) => void }) {
+export function DeviceDetailModal({ device, user, onClose, onDeviceUpdated, onDeviceUnclaimed }: { device: Device; user?: User; onClose: () => void; onDeviceUpdated?: (updated: Device) => void; onDeviceUnclaimed?: (id: string) => void }) {
   const [tab, setTab] = useState<"info" | "analytics" | "controls">("info");
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(device.displayName ?? device.serialNumber);
@@ -68,7 +68,7 @@ export function DeviceDetailModal({ device, user, onClose, onDeviceUpdated }: { 
 
         {tab === "info" && <DeviceDetailInfo device={device} />}
         {tab === "analytics" && <DeviceDetailAnalytics device={device} />}
-        {tab === "controls" && <DeviceDetailControls device={device} user={user} />}
+        {tab === "controls" && <DeviceDetailControls device={device} user={user} onDeviceUnclaimed={onDeviceUnclaimed} />}
       </div>
     </div>
   );

@@ -9,14 +9,15 @@ function getControlTopic(deviceId: string): string {
 }
 
 export async function performDeviceAction(identifier: string, input: DeviceActionRequest) {
+  const actorUserId = input.actorUserId || "system";
   if (input.action === "remove") {
     return {
       action: input.action,
-      device: await mongoService.unclaimDevice({ identifier, actorUserId: input.actorUserId, reason: input.reason }),
+      device: await mongoService.unclaimDevice({ identifier, actorUserId, reason: input.reason }),
     };
   }
 
-  return publishDeviceCommand(identifier, input.action, input.actorUserId, input.reason);
+  return publishDeviceCommand(identifier, input.action, actorUserId, input.reason);
 }
 
 async function publishDeviceCommand(identifier: string, action: Exclude<DeviceAction, "remove">, actorUserId: string, reason?: string) {

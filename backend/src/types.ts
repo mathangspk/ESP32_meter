@@ -44,7 +44,7 @@ export type DeviceAction = z.infer<typeof deviceActionSchema>;
 
 export const deviceActionRequestSchema = z.object({
   action: deviceActionSchema,
-  actorUserId: z.string().min(1),
+  actorUserId: z.string().min(1).optional(),
   reason: z.string().min(1).optional(),
 });
 
