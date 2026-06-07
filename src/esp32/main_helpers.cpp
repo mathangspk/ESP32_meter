@@ -35,7 +35,9 @@ void checkWiFi()
             }
             else
             {
-                Serial.println("⚠️ Mất kết nối WiFi! Đã đạt số lần thử lại tối đa.");
+                Serial.println("⚠️ Mất kết nối WiFi! Đã đạt số lần thử lại tối đa. Đang tự động khởi động lại...");
+                delay(1000);
+                ESP.restart();
             }
             if (currentLedState != WiFiLedStatus::OFF)
             {
