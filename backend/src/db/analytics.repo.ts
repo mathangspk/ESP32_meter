@@ -77,7 +77,12 @@ export class AnalyticsRepo {
     if (!device) return null;
     const site = device.siteId ? await this.sites.findOne({ siteId: device.siteId }) : null;
     const siteTimezone = site?.timezone || DEFAULT_SITE_TIMEZONE;
-    const computed = await hourly.getHourlyBreakdown(this.telemetryHourly, device, siteTimezone, date);
+    const computed = await hourly.getHourlyBreakdown(
+      { telemetry: this.telemetry, telemetryHourly: this.telemetryHourly },
+      device,
+      siteTimezone,
+      date,
+    );
     if (computed && !site?.timezone) {
       computed.messages.push(`Site timezone is missing, so analytics used the fallback timezone ${DEFAULT_SITE_TIMEZONE}.`);
     }

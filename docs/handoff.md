@@ -4,6 +4,28 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Hourly Analytics Timezone-Aligned On-Demand Rollup Bug Fix Milestone (2026-06-08)
+
+### What Was Confirmed & Verified
+- **Missing Hourly Data Cause Identified**: Confirmed that raw telemetry is complete (358-359 records per hour), but on-demand rollup was skipped for yesterday's data queries because it only triggered if the queried date was today's date in UTC.
+- **Timezone-Aligned On-Demand Rollup**: Shifted on-demand hourly rollup logic into `getHourlyBreakdown` to execute before querying hourly records. It now runs on-demand for any queried date range using the correct site timezone, ignoring future hours.
+- **Redundant Logic Removed**: Cleaned up the redundant and UTC-misaligned on-demand rollup block in the GET `/api/devices/:deviceId/analytics/hourly` endpoint.
+- **Typecheck Verified**: Confirmed that the backend compiles and typechecks successfully locally (`npm run typecheck` passed).
+- **100-Line Limit Compliance**: Verified all modified files remain under the 100-line code limit.
+
+### What Changed
+- **`backend/src/db/`**:
+  * `analytics.hourly.ts`: Added on-demand rollup call to `rollupTelemetryForDevice` prior to database query.
+  * `analytics.repo.ts`: Passed full context (telemetry and telemetryHourly collections) to `getHourlyBreakdown`.
+- **`backend/src/routes/`**:
+  * `devices.analytics.ts`: Removed redundant on-demand rollup check block.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Wait for the GitHub Action to build the backend Docker image, pull it on the VPS, restart the backend container, and verify the hourly charts.
+
 ## Web Dashboard Real-time Telemetry Polling Milestone (2026-06-07)
 
 ### What Was Confirmed & Verified

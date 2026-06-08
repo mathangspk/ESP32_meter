@@ -5,10 +5,11 @@ import {
   getTimeZoneParts,
   zonedDateTimeToUtc,
 } from "./analytics";
-import { DeviceListRecord, DeviceHourlyBreakdown, TelemetryHourlyRecord } from "./types";
+import { DeviceListRecord, DeviceHourlyBreakdown, TelemetryHourlyRecord, TelemetryRecord } from "./types";
+import { rollupTelemetryForDevice } from "./telemetry.rollup";
 
 export async function getHourlyBreakdown(
-  telemetryHourly: Collection<TelemetryHourlyRecord>,
+  ctx: { telemetry: Collection<TelemetryRecord>; telemetryHourly: Collection<TelemetryHourlyRecord> },
   device: DeviceListRecord,
   timezone: string,
   date: string,
@@ -41,7 +42,12 @@ export async function getHourlyBreakdown(
     resolvedDate = date;
   }
 
-  const hourlyRows = await telemetryHourly
+  const rollupEnd = new Date(Math.min(dayEnd.getTime(), Date.now()));
+  if (dayStart < rollupEnd) {
+    await rollupTelemetryForDevice(ctx, device.serialNumber, device.deviceId, dayStart, rollupEnd);
+  }
+
+  const hourlyRows = await ctx.telemetryHourly
     .find({ serialNumber: device.serialNumber, hourStart: { $gte: dayStart, $lt: dayEnd } })
     .sort({ hourStart: 1 })
     .toArray();
