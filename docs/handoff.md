@@ -4,6 +4,28 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## MQTT Servers Swapping & Firmware v1.0.9 Release Milestone (2026-06-09)
+
+### What Was Confirmed & Verified
+- **Roles Swapped**: Swapped primary and backup MQTT server configuration roles. The free/stronger VPS (`113.161.220.166`) is now the primary server, and the paid DigitalOcean VPS (`167.71.207.5`) is now the backup server.
+- **SSH Target Swapped**: Configured `vps-prod` to map to the new primary (`100.77.157.70:4422`) and `managetool-vps` to map to the backup (`167.71.207.5:22`) in `~/.ssh/config`.
+- **Firmware Compilation Success**: Bumped version to `1.0.9` and compiled successfully for both target environments (`esp32doit-devkit-v1` and `nodemcuv2`). Default MQTT broker was changed to `113.161.220.166` and backup to `167.71.207.5`.
+- **MQTT Bridge Updated**: Swapped MQTT bridges: removed bridge config on the new primary, and enabled MQTT bridge pointing to the new primary on the new backup.
+- **Redeployment Successful**: backend/frontend/database stack redeployed and restarted successfully on the new primary VPS.
+- **Release Registered**: Version `1.0.9` releases successfully registered in the new primary MongoDB database.
+
+### What Changed
+- **`platformio.ini`**: Bumped `FIRMWARE_VERSION` to `1.0.9`.
+- **`src/`**: Swapped default MQTT server IPs in C++ files of `src/esp32/` and `src/esp8266/` (`ConfigManager.cpp`, `DataSender.cpp`).
+- **`~/.ssh/config`**: Updated SSH configurations for `vps-prod` and `managetool-vps`.
+- **Mosquitto configurations**: Updated config files on both VPS hosts.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Push new firmware binary to the new primary VPS firmware host (port 8081) and trigger OTA upgrade for devices to v1.0.9.
+
 ## Hourly Analytics Timezone-Aligned On-Demand Rollup Bug Fix Milestone (2026-06-08)
 
 ### What Was Confirmed & Verified

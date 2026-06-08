@@ -1,19 +1,23 @@
-# Project Handoff - Fix Hourly Telemetry Data Gap (v1.0.9)
+# Project Handoff - Swap Primary and Backup MQTT Servers (v1.1.0)
 
 ## Summary of Changes
-- **Timezone-Aligned On-Demand Rollup**: Fixed missing hourly charts by triggering on-demand hourly rollup calculations directly in `getHourlyBreakdown` using the correct site timezone bounds and current time limits.
-- **REST Route Cleanup**: Removed redundant, UTC-misaligned on-demand rollup logic in GET `/api/devices/:deviceId/analytics/hourly` endpoint.
-- **File line-limit Compliance**: Kept all modified files strictly under the project-wide 100-line code limit.
+- **Swapped MQTT Broker Roles**: Swapped primary and backup roles so the free VPS (`113.161.220.166`) is the primary, and DigitalOcean (`167.71.207.5`) is the backup.
+- **Firmware C++ Configurations Swapped**: Swapped hardcoded default MQTT broker values in both ESP32 and ESP8266 source directories.
+- **PlatformIO Version Bumped**: Bumped the default firmware compilation macro `FIRMWARE_VERSION` to `1.0.9`.
+- **SSH Aliases Swapped**: Updated `vps-prod` alias in local SSH configuration to point to the new primary VPS (`100.77.157.70:4422`) and `managetool-vps` to point to the backup VPS.
+- **MQTT Bridge Updated**: Removed the MQTT bridge configuration on the new primary VPS and configured the bridge on the new backup VPS pointing to the new primary VPS.
+- **Redeployed backend**: backend/frontend/database stack successfully redeployed and running on the new primary VPS (`113.161.220.166`).
+- **Registered releases**: Version `1.0.9` firmware releases successfully registered in the new primary MongoDB database.
 
 ## Current System State
-- All devices (`7B34E3EC`, `D534E3EC`, `004A936C`) are reporting telemetry successfully (358-359 records per hour).
-- Backend successfully typechecks and is running stably.
-- Analytics charts will now automatically calculate missing hours on-demand for any selected date in their local timezone.
+- The new primary VPS runs the backend on port `3005`, and Mosquitto accepts local/external MQTT traffic.
+- The new backup VPS mosquitto bridge successfully connected to the new primary VPS.
+- Firmware compiles successfully with the new default configurations.
 
 ## Verification & Testing
-- **Local compilation**: Run `npm run typecheck` inside backend, succeeding with 0 errors.
-- **VPS Deployment**: Synced backend updates to VPS via docker compose. Next: wait for remote build or local container update verification.
+- **Compilation**: Verified firmware compiles successfully locally for ESP32 and ESP8266 targets.
+- **Bridge Connection**: Inspected logs of the new backup VPS mosquitto and confirmed the bridge initialized successfully.
+- **DB Verification**: Verified in MongoDB on the new primary VPS that `1.0.9` releases are registered successfully.
 
 ## Next Steps
-- Monitor backend server logs on the VPS.
-- Verify hourly analytics charts reflect complete yesterday data (June 7th) upon next UI request.
+- Host the compiled version `1.0.9` binaries on the new primary VPS port `8081` and trigger OTA update for fleet devices.
