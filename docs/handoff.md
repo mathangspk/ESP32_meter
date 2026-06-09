@@ -4,24 +4,27 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
-## MQTT Servers Swapping, DB Restoration & Firmware v1.0.9 Release Milestone (2026-06-09)
+## MQTT Servers Swapping, DB Restoration, Bidirectional Sync & Firmware v1.0.9 Release Milestone (2026-06-09)
 
 ### What Was Confirmed & Verified
 - **Roles Swapped**: Swapped primary and backup MQTT server configuration roles. The free/stronger VPS (`113.161.220.166`) is now the primary server, and the paid DigitalOcean VPS (`167.71.207.5`) is now the backup server.
 - **SSH Target Swapped**: Configured `vps-prod` to map to the new primary (`100.77.157.70:4422`) and `managetool-vps` to map to the backup (`167.71.207.5:22`) in `~/.ssh/config`.
 - **Firmware Compilation Success**: Bumped version to `1.0.9` and compiled successfully for both target environments (`esp32doit-devkit-v1` and `nodemcuv2`). Default MQTT broker was changed to `113.161.220.166` and backup to `167.71.207.5`.
-- **MQTT Bridge Updated**: Swapped MQTT bridges: removed bridge config on the new primary, and enabled MQTT bridge pointing to the new primary on the new backup.
+- **Bidirectional MQTT Bridge**: Configured the Mosquitto broker bridge on the backup VPS to be bidirectional for `meter/+/data`, `meter/+/ota/status`, `meter/+/control`, and `firmwareUpdateOTA/device/+` topics, allowing both servers to receive real-time telemetry and control commands.
 - **Redeployment & Port Conflict Resolution**: Backend/frontend/database stack redeployed and restarted successfully on the new primary VPS. Resolved port conflict by mapping backend container to host port `3005`.
 - **Database Restoration**: Successfully transferred, decrypted, and restored the latest MongoDB database dump from the backup DigitalOcean VPS to the new primary VPS. Telemetry document count (~398k) matches between servers.
 - **Active Telemetry Flow**: Verified that the primary VPS database is actively receiving and recording real-time telemetry from devices (verified latest records timestamp matches current UTC time).
+- **Automated Metadata Sync**: Set up passwordless SSH between primary and backup VPS hosts. Deployed `scripts/sync-metadata-to-backup.sh` running as an hourly cron job on the primary VPS to automatically sync system configuration collections (Users, Devices, Claims, Tenants, etc.) to the backup VPS database.
+- **Metadata Sync Verification**: Manually ran the `sync-metadata-to-backup.sh` script and verified that metadata database collections (e.g. Users, Devices) match count (`3` users, `3` devices) on both servers.
 - **Release Registered**: Version `1.0.9` releases successfully registered in the new primary MongoDB database.
 
 ### What Changed
 - **`platformio.ini`**: Bumped `FIRMWARE_VERSION` to `1.0.9`.
 - **`src/`**: Swapped default MQTT server IPs in C++ files of `src/esp32/` and `src/esp8266/` (`ConfigManager.cpp`, `DataSender.cpp`).
 - **`~/.ssh/config`**: Updated SSH configurations for `vps-prod` and `managetool-vps`.
-- **Mosquitto configurations**: Updated config files on both VPS hosts.
+- **Mosquitto configurations**: Updated config files on both VPS hosts (bidirectional bridge on backup, no bridge on primary).
 - **Port Mapping**: Docker-compose configurations modified to map the backend to host port `3005`.
+- **Metadata Sync Job**: Added hourly cron job execution on primary VPS host.
 
 ### Remaining Issues
 - None.
