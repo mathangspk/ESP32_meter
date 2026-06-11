@@ -4,6 +4,24 @@
 
 System stable and fully deployed. Web dashboard maturing toward end-user access.
 
+## Duplicate Device States & Active-Passive Telegram Bot Conflict Fix Milestone (2026-06-11)
+
+### What Was Confirmed & Verified
+- **Telegram Bot Conflict Resolved**: Identified and resolved the `Conflict 409: terminated by other getUpdates request` error caused by the `assistant-bot` running simultaneously on both the primary and backup VPS hosts with the same Telegram Bot token.
+- **Spam Offline/Online Alerts Fixed**: Identified the root cause of the constant online/offline alerts for device `7B34E3EC`. The backup VPS database had duplicate `device_states` documents for `7B34E3EC` because the unique index on `deviceId` was missing. One duplicate was stuck in the past, triggering offline alerts every 10 seconds, while incoming bridged telemetry updated the other, triggering recovered alerts.
+- **Re-indexing & Sync Verification**: Manually ran the metadata sync script which dropped the duplicate documents and successfully rebuilt the unique index `deviceId_1` on the backup database.
+- **Clean Primary Polling**: Confirmed that the primary VPS `assistant-bot` is now polling Telegram getUpdates cleanly and stably without any more Conflict 409 errors.
+
+### What Changed
+- **Backup Bot Disabled**: Appended `_placeholder_backup_disabled` to `TELEGRAM_BOT_TOKEN` in `/home/technician/esp32_loss_power_deploy/.env.prod` on the backup VPS. This cleanly disables the bot's getUpdates and notification queue processors on the passive node.
+- **Services Restarted**: Recreated and restarted the backup services, and restarted the primary VPS `assistant-bot` to instantly restore normal bot operations and clear the API backoff delays.
+
+### Remaining Issues
+- None.
+
+### Exact Next Step
+- Monitor Telegram bot alerts and device status normally.
+
 ## MQTT Servers Swapping, DB Restoration, Bidirectional Sync & Firmware v1.0.9 Release Milestone (2026-06-09)
 
 ### What Was Confirmed & Verified
